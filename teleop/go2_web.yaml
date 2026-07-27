@@ -10,7 +10,7 @@ Robot:
   sensor: default
   tiled_sensor: True
 
-  init_position: [207., 210., 0.6]
+  init_position: [10., -23., 0.55]   # 도시 START (보도 위)
 Omniverse:
   headless: True
   simulation_dt: 0.005

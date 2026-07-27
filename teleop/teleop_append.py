@@ -126,7 +126,8 @@ print(f"[teleop] base focal length: {_BASE_FL}", flush=True)
 _last_fl = [0.0]
 
 
-CAMCFG = {"td": 9.0, "th": 5.5, "tp": 24.0, "ex": 0.35, "ez": 0.32, "ep": 0.0, "fl": 0.55}
+# TPV 구면 오빗: ta=방위각(0=로봇 정후방, deg) te=고도각(deg) tr=반경(m) ah=조준높이(m)
+CAMCFG = {"ta": 0.0, "te": 31.5, "tr": 10.55, "ah": 0.6, "ex": 0.35, "ez": 0.32, "ep": 0.0, "fl": 0.55}
 
 
 def _update_cameras(yaw_cmd=None):
@@ -147,8 +148,15 @@ def _update_cameras(yaw_cmd=None):
             print("[teleop] focal set failed:", e, flush=True)
     ego_pos = _np.array([pos[0] + fx * c["ex"], pos[1] + fy * c["ex"], pos[2] + c["ez"]])
     cam_ego.set_world_pose(ego_pos, _quat_yaw_pitch(yaw, math.radians(c["ep"])), camera_axes="world")
-    tpv_pos = _np.array([pos[0] - fx * c["td"], pos[1] - fy * c["td"], pos[2] + c["th"]])
-    cam_tpv.set_world_pose(tpv_pos, _quat_yaw_pitch(yaw, math.radians(c["tp"])), camera_axes="world")
+    _te = math.radians(max(3.0, min(85.0, c.get("te", 31.5))))
+    _tr = max(2.0, min(40.0, c.get("tr", 10.55)))
+    _az = yaw + math.pi + math.radians(c.get("ta", 0.0))   # ta=0 → 정후방
+    _hd = _tr * math.cos(_te)
+    tpv_pos = _np.array([pos[0] + _hd * math.cos(_az), pos[1] + _hd * math.sin(_az), pos[2] + _tr * math.sin(_te)])
+    _aim_z = pos[2] + c.get("ah", 0.6)
+    _cy = math.atan2(pos[1] - tpv_pos[1], pos[0] - tpv_pos[0])
+    _cp = math.atan2(tpv_pos[2] - _aim_z, max(_hd, 0.01))   # 양수=아래
+    cam_tpv.set_world_pose(tpv_pos, _quat_yaw_pitch(_cy, _cp), camera_axes="world")
     return pos, yaw
 
 
@@ -272,7 +280,7 @@ kbd{background:#333;border-radius:3px;padding:1px 6px;font-size:12px}
 <style>#scen button{background:#2a3140;color:#cde;border:1px solid #445;border-radius:4px;
  padding:2px 8px;font-size:12px;cursor:pointer}#scen button:hover{background:#3a4560}</style>
 <div class="wrap">
-  <div class="panel"><h3>제3자 뷰 (Third-person)</h3><img src="/stream/tpv"></div>
+  <div class="panel"><h3>제3자 뷰 (Third-person) — 드래그: 회전 · 휠: 줌</h3><img id="tpv" src="/stream/tpv" draggable="false" style="cursor:grab"></div>
   <div class="panel"><h3>에고 뷰 (Ego)</h3><img src="/stream/ego"></div>
 </div>
 <div id="mmbox"><canvas id="mm" width="280" height="280"></canvas>
@@ -329,6 +337,22 @@ function updNav(){if(!CPS.length)return;const p=CPS[cpi];
  document.getElementById('navarrow').style.transform=`rotate(${-rel*180/Math.PI}deg)`;
  document.getElementById('navtxt').textContent=`체크포인트 ${cpi}/${CPS.length-1} · ${d.toFixed(0)}m`;}
 setInterval(async()=>{try{const s=await(await fetch('/status')).json();RS=s;drawMM();updNav();}catch(e){}},250);
+// TPV 마우스 오빗/줌 (로봇 중심)
+let camS={ta:0,te:31.5,tr:10.55}, camDirty=false, camDrag=null;
+const tpvEl=document.getElementById('tpv');
+tpvEl.addEventListener('mousedown',e=>{camDrag=[e.clientX,e.clientY];tpvEl.style.cursor='grabbing';e.preventDefault();});
+addEventListener('mouseup',()=>{camDrag=null;tpvEl.style.cursor='grab';});
+addEventListener('mousemove',e=>{
+  if(!camDrag)return;
+  camS.ta-=(e.clientX-camDrag[0])*0.4;
+  camS.te=Math.max(5,Math.min(80,camS.te+(e.clientY-camDrag[1])*0.25));
+  camDrag=[e.clientX,e.clientY];camDirty=true;
+});
+tpvEl.addEventListener('wheel',e=>{
+  camS.tr=Math.max(2.5,Math.min(35,camS.tr*(e.deltaY>0?1.1:0.9)));
+  camDirty=true;e.preventDefault();
+},{passive:false});
+setInterval(()=>{if(camDirty){camDirty=false;fetch('/cam',{method:'POST',body:JSON.stringify(camS)});}},120);
 </script></body></html>"""
 
 
