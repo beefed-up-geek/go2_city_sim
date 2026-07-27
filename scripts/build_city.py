@@ -31,7 +31,7 @@ BASE = os.environ.get("URBANSIM_WS", "/workspace/urban-sim")          # 외부 �
 L = json.load(open(f"{ROOT}/assets/city_layout.json"))
 EXT, RW, SWI, SWO = 65.0, 3.5, 3.5, 6.5
 RCL, BLK, PER, SH = 28.0, 21.5, 34.5, 3.0
-CURB = 0.07
+CURB = 0.105   # v5.3: 보도 두께 1.5배 (0.07 → 0.105)
 MAT = f"{BASE}/assets/materials"
 NV = f"{BASE}/assets_nvidia/NVIDIA"
 CUSTOM = f"{ROOT}/assets/usd"
@@ -101,10 +101,40 @@ GR = L["ground"]
 GEXT = 77.0
 rect_slab(G+"/grass", -GEXT, -GEXT, GEXT, GEXT, -0.30, -0.002, m_grass, uv=0.25)
 for i, r in enumerate(GR["road"]): rect_slab(f"{G}/road{i}", *r, -0.30, 0.0, m_asph, uv=0.35)
-for i, r in enumerate(GR["block"]): rect_slab(f"{G}/block{i}", *r, -0.05, CURB, m_gran, uv=0.3)
-for i, r in enumerate(GR["fill"]): rect_slab(f"{G}/fill{i}", *r, -0.05, CURB, m_gran, uv=0.3)
-for i, r in enumerate(GR["walk"]): rect_slab(f"{G}/walk{i}", *r, -0.05, CURB, m_pave, uv=0.8)
-for i, r in enumerate(GR["narrow"]): rect_slab(f"{G}/narrow{i}", *r, -0.05, CURB, m_pave, uv=0.8)
+# v5.3 커브램프(보도 절개형): 횡단보도 양끝에서 보도를 절개(본선 4.0m + 플레어 1.2m×2, 런 1.5m)
+RAMP_L, RAMP_F = 1.5, 1.2
+_CUTS = []
+for _cw in L["crosswalks"]:
+    _ccx, _ccy = _cw["center"]; _hw = _cw["depth"]/2 + RAMP_F
+    for _sgn in (1, -1):
+        if _cw["axis"] == "v":
+            _e = _ccx + _sgn*RW
+            _CUTS.append((min(_e, _e+_sgn*RAMP_L), _ccy-_hw, max(_e, _e+_sgn*RAMP_L), _ccy+_hw))
+        else:
+            _e = _ccy + _sgn*RW
+            _CUTS.append((_ccx-_hw, min(_e, _e+_sgn*RAMP_L), _ccx+_hw, max(_e, _e+_sgn*RAMP_L)))
+def _sub_rect(rects, cut):
+    out = []
+    cx1, cy1, cx2, cy2 = cut
+    for (x1, y1, x2, y2) in rects:
+        if cx1 >= x2-1e-6 or cx2 <= x1+1e-6 or cy1 >= y2-1e-6 or cy2 <= y1+1e-6:
+            out.append((x1, y1, x2, y2)); continue
+        iy1, iy2 = max(y1, cy1), min(y2, cy2)
+        if iy1 > y1: out.append((x1, y1, x2, iy1))
+        if iy2 < y2: out.append((x1, iy2, x2, y2))
+        if max(x1, cx1) > x1: out.append((x1, iy1, max(x1, cx1), iy2))
+        if min(x2, cx2) < x2: out.append((min(x2, cx2), iy1, x2, iy2))
+    return out
+def _lay(nm, rects, mat, uv):
+    rs = [tuple(r) for r in rects]
+    for _c in _CUTS: rs = _sub_rect(rs, _c)
+    for i, r in enumerate(rs):
+        if r[2]-r[0] > 0.02 and r[3]-r[1] > 0.02:
+            rect_slab(f"{G}/{nm}{i}", *r, -0.05, CURB, mat, uv=uv)
+_lay("block", GR["block"], m_gran, 0.3)
+_lay("fill", GR["fill"], m_gran, 0.3)
+_lay("walk", GR["walk"], m_pave, 0.8)
+_lay("narrow", GR["narrow"], m_pave, 0.8)
 for i, r in enumerate(GR["brick"]): rect_slab(f"{G}/brick{i}", *r, -0.05, CURB, m_cobb, uv=0.8)
 
 # 횡단보도 + 정지선 + 램프
@@ -119,36 +149,66 @@ for ci, cw in enumerate(L["crosswalks"]):
         y = cy - RW + 0.35; j = 0
         while y < cy + RW - 0.3:
             rect_slab(f"{Z}/cw{ci}_{j}", cx-dp/2, y, cx+dp/2, y+0.7, 0.0, 0.012, m_white, uv=0); y += 1.4; j += 1
-def ramp_mesh(path, cx, cy, w, d, down, mat):
-    """경사 웨지: down 방향으로 연석높이(CURB)->차도(0.006)로 내려가는 슬로프"""
-    dxn, dyn = down
-    ls = abs(dxn)*w + abs(dyn)*d          # 경사 길이
-    wa = abs(dyn)*w + abs(dxn)*d          # 가로 폭
-    ax, ay = -dyn, dxn
-    bcx, bcy = cx - dxn*ls/2, cy - dyn*ls/2   # 뒤(높은 쪽, 보도)
-    fcx, fcy = cx + dxn*ls/2, cy + dyn*ls/2   # 앞(낮은 쪽, 차도)
-    top = [(bcx-ax*wa/2, bcy-ay*wa/2, CURB+0.006), (bcx+ax*wa/2, bcy+ay*wa/2, CURB+0.006),
-           (fcx+ax*wa/2, fcy+ay*wa/2, 0.004), (fcx-ax*wa/2, fcy-ay*wa/2, 0.004)]
+# v5.3 커브램프 본선(피치 box) + 플레어(닫힌 삼각 프리즘 2매×양측, 법선 외향 와인딩)
+def tri_prism(path, pts3, mat, z0=-0.05, uv=0.8):
+    (ax_, ay_, az_), (bx_, by_, bz_), (cx_, cy_, cz_) = pts3
+    if (bx_-ax_)*(cy_-ay_) - (by_-ay_)*(cx_-ax_) < 0:   # 상면 CCW(위에서) 보장
+        (bx_, by_, bz_), (cx_, cy_, cz_) = (cx_, cy_, cz_), (bx_, by_, bz_)
+    top = [(ax_, ay_, az_), (bx_, by_, bz_), (cx_, cy_, cz_)]
     m = UsdGeom.Mesh.Define(stage, path)
-    pts = [Gf.Vec3f(x_, y_, -0.05) for (x_, y_, _) in top] + [Gf.Vec3f(*p) for p in top]
-    m.CreatePointsAttr(pts)
-    m.CreateFaceVertexCountsAttr([4]*6)
-    m.CreateFaceVertexIndicesAttr([4,5,6,7, 0,3,2,1, 0,1,5,4, 2,3,7,6, 1,2,6,5, 3,0,4,7])
-    st = [(0,0),(1,0),(1,1),(0,1)]*6
+    pts = [Gf.Vec3f(x_, y_, z0) for (x_, y_, _z) in top] + [Gf.Vec3f(*p) for p in top]
+    m.CreatePointsAttr(pts)                     # 0..2 바닥, 3..5 상면
+    m.CreateFaceVertexCountsAttr([3, 3, 4, 4, 4])
+    m.CreateFaceVertexIndicesAttr([3,4,5, 0,2,1, 0,1,4,3, 1,2,5,4, 2,0,3,5])
+    st = [(p[0]*uv, p[1]*uv) for p in top]
+    st += [(top[0][0]*uv, top[0][1]*uv), (top[2][0]*uv, top[2][1]*uv), (top[1][0]*uv, top[1][1]*uv)]
+    st += [(0,0),(uv,0),(uv,0.1),(0,0.1)]*3
     pv = UsdGeom.PrimvarsAPI(m).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.faceVarying)
-    pv.Set([Gf.Vec2f(*s) for s in st])
-    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
-    m.CreateExtentAttr([Gf.Vec3f(min(xs), min(ys), -0.05), Gf.Vec3f(max(xs), max(ys), CURB+0.01)])
+    pv.Set([Gf.Vec2f(*x) for x in st])
+    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]; zs = [float(p[2]) for p in pts]
+    m.CreateExtentAttr([Gf.Vec3f(min(xs), min(ys), min(zs)), Gf.Vec3f(max(xs), max(ys), max(zs))])
     UsdShade.MaterialBindingAPI.Apply(m.GetPrim()).Bind(mat)
     UsdPhysics.CollisionAPI.Apply(m.GetPrim())
 
-for ri, rp in enumerate(L["ramps"]):  # 경사 램프: 검증된 box_mesh를 피치 회전(웨지 커스텀 메시는 PhysX 쿠킹 실패 전력)
+_ZL = 0.012                       # 연석선 접속 높이(횡단보도 도색면과 flush)
+_SLP = (CURB - _ZL) / RAMP_L      # 본선 경사 (Δh 93mm / 1.5m = 6.2%)
+for ci, cw in enumerate(L["crosswalks"]):
+    ccx, ccy = cw["center"]; hw = cw["depth"]/2
+    for si, sgn in enumerate((1, -1)):
+        L1 = RAMP_L + 0.03        # 보도 밑으로 3cm 랩 (미세 틈 방지)
+        if cw["axis"] == "v":
+            e = ccx + sgn*RW
+            rcx, rcy = e + sgn*L1/2, ccy
+            dwn = (-sgn, 0.0)
+        else:
+            e = ccy + sgn*RW
+            rcx, rcy = ccx, e + sgn*L1/2
+            dwn = (0.0, -sgn)
+        box_mesh(f"{Z}/cut{ci}_{si}", rcx, rcy, L1, cw["depth"], -0.20, _ZL + _SLP*L1/2, m_pave,
+                 yaw=math.degrees(math.atan2(dwn[1], dwn[0])), pitch=math.degrees(math.atan(_SLP)), uv=0.8)
+        for fi, s2 in enumerate((1, -1)):
+            if cw["axis"] == "v":
+                A = (e, ccy + s2*hw, _ZL)
+                B = (e, ccy + s2*(hw+RAMP_F), CURB)
+                C = (e + sgn*RAMP_L, ccy + s2*hw, CURB)
+                D = (e + sgn*RAMP_L, ccy + s2*(hw+RAMP_F), CURB)
+            else:
+                A = (ccx + s2*hw, e, _ZL)
+                B = (ccx + s2*(hw+RAMP_F), e, CURB)
+                C = (ccx + s2*hw, e + sgn*RAMP_L, CURB)
+                D = (ccx + s2*(hw+RAMP_F), e + sgn*RAMP_L, CURB)
+            tri_prism(f"{Z}/cutf{ci}_{si}_{fi}a", (A, B, C), m_pave)
+            tri_prism(f"{Z}/cutf{ci}_{si}_{fi}b", (B, D, C), m_pave)
+
+for ri, rp in enumerate(L["ramps"]):  # 잔여 웨지 램프(차량 진입·공사 우회) — crosswalk형은 v5.3 절개형으로 대체
+    if rp.get("why") == "crosswalk":
+        continue
     x, y = rp["pos"]; dx_, dy_ = rp["down"]
     ls = abs(dx_)*rp["w"] + abs(dy_)*rp["d"]
     wa = abs(dy_)*rp["w"] + abs(dx_)*rp["d"]
     yaw_ = math.degrees(math.atan2(dy_, dx_))
-    pitch_ = math.degrees(math.atan(0.072/ls))
-    box_mesh(f"{Z}/ramp{ri}", x, y, ls, wa, -0.20, 0.042, m_pave, yaw=yaw_, pitch=pitch_, uv=0.8)
+    pitch_ = math.degrees(math.atan((CURB + 0.002)/ls))
+    box_mesh(f"{Z}/ramp{ri}", x, y, ls, wa, -0.20, 0.006 + (CURB - 0.004)/2, m_pave, yaw=yaw_, pitch=pitch_, uv=0.8)
 ARMV = {"N": (0,1), "S": (0,-1), "E": (1,0), "W": (-1,0)}
 for ci, cw in enumerate(L["crosswalks"]):  # 정지선(접근차로 반폭)
     ix, iy = cw["inter"]; dx, dy = ARMV[cw["arm"]]

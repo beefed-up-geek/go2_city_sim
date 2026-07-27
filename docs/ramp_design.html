@@ -1,0 +1,245 @@
+<title>커브램프 재설계안 — go2_city_sim</title>
+<style>
+:root{
+  --paper:#F1F2EF; --sheet:#FAFAF7; --ink:#23272B; --ink2:#5A6167;
+  --line:#C9CCC5; --accent:#D99A06; --accentInk:#8A6203;
+  --danger:#C24A3A; --ok:#3E7C4F;
+  --asphalt:#3A3E42; --walk:#D8DAD2; --ramp:#EFD9A0; --flare:#F5E8C8;
+  --mono:"SF Mono","Cascadia Mono",Consolas,"Nanum Gothic Coding",monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#1B1D1F; --sheet:#232629; --ink:#E4E4DE; --ink2:#9BA1A6;
+  --line:#43474B; --accent:#E8B23A; --accentInk:#E8B23A;
+  --danger:#D96A5A; --ok:#6FAF7F;
+  --asphalt:#101214; --walk:#3C4045; --ramp:#6B5A2B; --flare:#54492C;
+}}
+:root[data-theme="dark"]{
+  --paper:#1B1D1F; --sheet:#232629; --ink:#E4E4DE; --ink2:#9BA1A6;
+  --line:#43474B; --accent:#E8B23A; --accentInk:#E8B23A;
+  --danger:#D96A5A; --ok:#6FAF7F;
+  --asphalt:#101214; --walk:#3C4045; --ramp:#6B5A2B; --flare:#54492C;
+}
+:root[data-theme="light"]{
+  --paper:#F1F2EF; --sheet:#FAFAF7; --ink:#23272B; --ink2:#5A6167;
+  --line:#C9CCC5; --accent:#D99A06; --accentInk:#8A6203;
+  --danger:#C24A3A; --ok:#3E7C4F;
+  --asphalt:#3A3E42; --walk:#D8DAD2; --ramp:#EFD9A0; --flare:#F5E8C8;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+  line-height:1.62;font-size:15.5px}
+.wrap{max-width:900px;margin:0 auto;padding:48px 24px 96px}
+header{border-bottom:3px solid var(--ink);padding-bottom:20px;margin-bottom:36px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--accentInk);text-transform:uppercase}
+h1{font-size:30px;font-weight:800;margin:6px 0 8px;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--ink2);max-width:62ch;margin:0}
+h2{font-size:20px;font-weight:750;margin:52px 0 6px;letter-spacing:-.005em}
+h2 .no{font-family:var(--mono);color:var(--accentInk);font-size:15px;margin-right:8px}
+p{max-width:68ch}
+.sheet{background:var(--sheet);border:1.5px solid var(--ink);margin:20px 0;position:relative}
+.sheet svg{display:block;width:100%;height:auto}
+.tblock{display:flex;justify-content:space-between;align-items:center;border-top:1.5px solid var(--ink);
+  padding:6px 12px;font-family:var(--mono);font-size:11.5px;color:var(--ink2)}
+.tblock b{color:var(--ink);font-weight:600}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-variant-numeric:tabular-nums}
+th{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);
+  border-bottom:1.5px solid var(--ink);text-align:left;padding:7px 10px}
+td{border-bottom:1px solid var(--line);padding:8px 10px;vertical-align:top}
+td.n{font-family:var(--mono);font-size:13.5px;white-space:nowrap}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid currentColor;border-radius:2px}
+.tag.bad{color:var(--danger)} .tag.good{color:var(--ok)}
+.note{border-left:3px solid var(--accent);padding:10px 16px;background:color-mix(in srgb,var(--accent) 7%,var(--sheet));margin:18px 0;max-width:70ch}
+.note b{color:var(--accentInk)}
+.scroll{overflow-x:auto}
+ol{max-width:68ch;padding-left:22px} li{margin:6px 0}
+.dim{font-family:var(--mono);font-size:13px}
+footer{margin-top:64px;border-top:1px solid var(--line);padding-top:14px;color:var(--ink2);font-size:13px}
+</style>
+<div class="wrap">
+<header>
+  <div class="eyebrow">go2_city_sim · Design Proposal · GCS-R-01 rev.1 (as-built, v5.3)</div>
+  <h1>커브램프 재설계안 — 보도 절개형(Curb Cut)</h1>
+  <p class="sub">현행 램프는 차도 위에 얹힌 웨지여서 차량 동선을 1.7 m 침범한다.
+  본 안은 램프를 <b>보도 안쪽으로</b> 옮긴다: 횡단보도와 같은 폭(4.0 m)으로 보도를 절개해 그 자리를 경사면으로 만들고, 양옆에 측면 플레어를 두어 <b>어느 각도로 지나도 수직 단차 0 mm</b>를 보장한다. rev.1은 보도 두께 1.5배(70→105 mm) 요구를 반영해 산정했고, v5.3 빌드로 시뮬레이션에 적용되었다.</p>
+</header>
+
+<h2><span class="no">01</span>현행 문제 / 개선 개요 — 평면도</h2>
+<div class="sheet">
+<svg viewBox="0 0 880 400" role="img" aria-label="현행과 개선안 평면도 비교">
+<defs>
+  <pattern id="hz" width="10" height="10" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+    <rect width="10" height="10" fill="none"/><line x1="0" y1="0" x2="0" y2="10" stroke="var(--danger)" stroke-width="2.5"/>
+  </pattern>
+  <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0 0 L8 4 L0 8 z" fill="var(--ink)"/>
+  </marker>
+</defs>
+<!-- ===== 좌: 현행 ===== -->
+<g>
+  <text x="20" y="30" font-size="14" font-weight="700" fill="var(--danger)" font-family="var(--mono)">현행 — 차도 돌출형</text>
+  <!-- 보도 -->
+  <rect x="20" y="48" width="400" height="96" fill="var(--walk)"/>
+  <text x="34" y="76" font-size="12" fill="var(--ink2)">보도 (z = 105 mm)</text>
+  <!-- 차도 -->
+  <rect x="20" y="144" width="400" height="216" fill="var(--asphalt)"/>
+  <text x="34" y="348" font-size="12" fill="#cfd2d6">차도 (z = 0)</text>
+  <!-- 횡단보도 밴드 -->
+  <g>
+    <rect x="156" y="152" width="128" height="200" fill="none"/>
+    <rect x="160" y="158" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="160" y="190" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="160" y="222" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="160" y="254" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="160" y="286" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="160" y="318" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+  </g>
+  <!-- 돌출 램프 -->
+  <rect x="196" y="144" width="48" height="55" fill="var(--ramp)" stroke="var(--danger)" stroke-width="2"/>
+  <rect x="196" y="144" width="48" height="55" fill="url(#hz)" opacity=".55"/>
+  <line x1="250" y1="144" x2="250" y2="199" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="258" y="176" font-size="12" class="dim" fill="var(--ink)">1.7 m 돌출</text>
+  <text x="196" y="386" font-size="12.5" fill="var(--danger)">램프(1.5×2.6 m 웨지)가 차로 위에 얹혀 차량 동선과 간섭</text>
+</g>
+<!-- ===== 우: 개선 ===== -->
+<g>
+  <text x="460" y="30" font-size="14" font-weight="700" fill="var(--ok)" font-family="var(--mono)">개선 — 보도 절개형</text>
+  <!-- 보도 -->
+  <rect x="460" y="48" width="400" height="96" fill="var(--walk)"/>
+  <!-- 절개부: 플레어(1m) + 본선(4m) + 플레어(1m), 런 1.6m = 51px, 보도 96px(3m) 중 하단 -->
+  <polygon points="564,144 596,144 596,93 564,144" fill="var(--flare)" stroke="var(--ink)" stroke-width="1"/>
+  <polygon points="564,144 596,93 596,144" fill="var(--flare)"/>
+  <rect x="596" y="93" width="128" height="51" fill="var(--ramp)" stroke="var(--ink)" stroke-width="1"/>
+  <polygon points="756,144 724,144 724,93 756,144" fill="var(--flare)" stroke="var(--ink)" stroke-width="1"/>
+  <!-- 경사 화살표 -->
+  <line x1="660" y1="102" x2="660" y2="136" stroke="var(--accentInk)" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="668" y="122" font-size="11.5" class="dim" fill="var(--accentInk)">3.5°</text>
+  <text x="474" y="76" font-size="12" fill="var(--ink2)">보도 잔여 통행대 1.5 m (z = 105 mm 평탄)</text>
+  <!-- 차도 -->
+  <rect x="460" y="144" width="400" height="216" fill="var(--asphalt)"/>
+  <!-- 횡단보도 밴드 (본선과 정렬) -->
+  <g>
+    <rect x="600" y="158" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="600" y="190" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="600" y="222" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="600" y="254" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="600" y="286" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+    <rect x="600" y="318" width="120" height="16" fill="#e8e8e4" opacity=".92"/>
+  </g>
+  <text x="474" y="348" font-size="12" fill="#cfd2d6">차도 — 돌출물 없음</text>
+  <!-- 치수선: 본선 폭 -->
+  <line x1="596" y1="84" x2="724" y2="84" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="636" y="78" font-size="11.5" class="dim" fill="var(--ink)">4.0 m (=횡단보도)</text>
+  <line x1="564" y1="152" x2="596" y2="152" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="548" y="168" font-size="11" class="dim" fill="var(--ink)">플레어 1.2</text>
+  <line x1="732" y1="93" x2="732" y2="144" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="740" y="122" font-size="11" class="dim" fill="var(--ink)">런 1.5</text>
+  <!-- 단면 표시선 -->
+  <line x1="660" y1="60" x2="660" y2="352" stroke="var(--accentInk)" stroke-width="1" stroke-dasharray="6 5"/>
+  <text x="648" y="56" font-size="11" class="dim" fill="var(--accentInk)">A</text>
+  <text x="648" y="366" font-size="11" class="dim" fill="var(--accentInk)">A</text>
+  <line x1="540" y1="140" x2="800" y2="140" stroke="var(--accentInk)" stroke-width="1" stroke-dasharray="6 5"/>
+  <text x="806" y="144" font-size="11" class="dim" fill="var(--accentInk)">B</text>
+  <text x="526" y="144" font-size="11" class="dim" fill="var(--accentInk)">B</text>
+</g>
+</svg>
+<div class="tblock"><span><b>도면 1</b> — 평면도(발췌) · 축척 개념도</span><span>램프는 보도 폭 3.0 m 안에서만 형성, 차도 침범 0</span></div>
+</div>
+
+<h2><span class="no">02</span>단면 A–A (횡단 진행 방향)</h2>
+<div class="sheet">
+<svg viewBox="0 0 880 240" role="img" aria-label="단면 A-A">
+  <!-- 수직 8배 과장: 1mm = 0.55px, 1m(수평) = 110px -->
+  <!-- 지반 -->
+  <line x1="40" y1="200" x2="840" y2="200" stroke="var(--line)" stroke-width="1"/>
+  <!-- 차도면 z=0→표면 z=6mm(도색) : y = 197 -->
+  <polygon points="60,200 330,200 330,196.7 60,196.7" fill="var(--asphalt)"/>
+  <text x="80" y="188" font-size="12" fill="var(--ink2)">차도 · 횡단보도 도색면 z=12</text>
+  <!-- 램프: x 330→506 (1.6m), z 6→70 : y 196.7→161.5 -->
+  <polygon points="330,200 506,200 506,161.5 330,196.7" fill="var(--ramp)" stroke="var(--ink)" stroke-width="1.2"/>
+  <!-- 보도 잔여: 1.4m = 154px -->
+  <polygon points="506,200 660,200 660,161.5 506,161.5" fill="var(--walk)" stroke="var(--ink)" stroke-width="1.2"/>
+  <text x="524" y="152" font-size="12" fill="var(--ink2)">보도 통행대 z=105</text>
+  <!-- 경사 표기 -->
+  <text x="380" y="172" font-size="13" font-weight="700" fill="var(--accentInk)" class="dim">6.2 % (3.5°)</text>
+  <!-- 립 0 표기 -->
+  <circle cx="330" cy="196.7" r="5" fill="none" stroke="var(--ok)" stroke-width="1.6"/>
+  <text x="290" y="222" font-size="11.5" fill="var(--ok)" class="dim">립 0 mm (flush)</text>
+  <circle cx="506" cy="161.5" r="5" fill="none" stroke="var(--ok)" stroke-width="1.6"/>
+  <text x="470" y="150" font-size="11.5" fill="var(--ok)" class="dim">꺾임점 단차 없음</text>
+  <!-- 치수 -->
+  <line x1="330" y1="212" x2="506" y2="212" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="398" y="228" font-size="11.5" class="dim">1.5 m</text>
+  <line x1="672" y1="200" x2="672" y2="161.5" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="680" y="184" font-size="11.5" class="dim">Δh 93 mm</text>
+</svg>
+<div class="tblock"><span><b>도면 2</b> — 단면 A–A · 수직 8배 과장</span><span>차도 → 램프(런 1.5 m) → 보도 통행대</span></div>
+</div>
+
+<h2><span class="no">03</span>단면 B–B (연석선 방향, 플레어)</h2>
+<div class="sheet">
+<svg viewBox="0 0 880 240" role="img" aria-label="단면 B-B">
+  <line x1="40" y1="200" x2="840" y2="200" stroke="var(--line)" stroke-width="1"/>
+  <!-- 좌측 일반 보도 -->
+  <polygon points="60,200 170,200 170,161.5 60,161.5" fill="var(--walk)" stroke="var(--ink)" stroke-width="1.2"/>
+  <text x="76" y="152" font-size="12" fill="var(--ink2)">보도 z=105</text>
+  <!-- 좌 플레어: 1.0m=110px, 70→6mm -->
+  <polygon points="170,200 280,200 280,196.7 170,161.5" fill="var(--flare)" stroke="var(--ink)" stroke-width="1.2"/>
+  <text x="180" y="178" font-size="12" fill="var(--accentInk)" class="dim">7.75 % (4.4°)</text>
+  <!-- 본선 바닥(연석선 높이 z=6): 4.0m=440px -->
+  <polygon points="280,200 720,200 720,196.7 280,196.7" fill="var(--ramp)" stroke="var(--ink)" stroke-width="1.2"/>
+  <text x="452" y="188" font-size="12" fill="var(--ink2)">램프 하단 모서리(연석선) z=12</text>
+  <!-- 우 플레어 -->
+  <polygon points="720,200 830,200 720,161.5 830,161.5" fill="var(--flare)" stroke="var(--ink)" stroke-width="1.2"/>
+  <!-- 치수 -->
+  <line x1="170" y1="216" x2="280" y2="216" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="200" y="231" font-size="11.5" class="dim">1.2 m</text>
+  <line x1="280" y1="216" x2="720" y2="216" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="482" y="231" font-size="11.5" class="dim">4.0 m</text>
+  <line x1="720" y1="216" x2="830" y2="216" stroke="var(--ink)" stroke-width="1" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="756" y="231" font-size="11.5" class="dim">1.2 m</text>
+</svg>
+<div class="tblock"><span><b>도면 3</b> — 단면 B–B(연석선 위치) · 수직 8배 과장</span><span>플레어 단면은 보도 안쪽으로 갈수록 완화되어 램프 상단선에서 0 %</span></div>
+</div>
+
+<p>플레어는 뒤틀린 면(warped plane)이다: 연석선 위에서는 7.75 %로 기울지만,
+램프 상단선(런 1.5 m 지점)에서는 보도와 같은 높이가 되어 경사 0 %로 수렴한다.
+따라서 보도를 따라 걷다 절개부를 지나는 경로에도 계단형 단차가 전혀 없다.</p>
+
+<h2><span class="no">04</span>진입 각도별 무단차 검증</h2>
+<div class="scroll"><table>
+<tr><th>진입 경로</th><th>만나는 면</th><th>최대 경사</th><th>수직 단차</th><th>판정</th></tr>
+<tr><td>정면 진입 (차도→보도, 횡단 방향)</td><td>본선 램프</td><td class="n">6.2 % (3.5°)</td><td class="n">0 mm</td><td><span class="tag good">통과</span></td></tr>
+<tr><td>보도 종주 (연석 방향, 절개부 관통)</td><td>플레어↓ → 본선 하단 → 플레어↑</td><td class="n">7.75 % (4.4°)</td><td class="n">0 mm</td><td><span class="tag good">통과</span></td></tr>
+<tr><td>대각 진입 (플레어 모서리)</td><td>플레어 최대구배 방향</td><td class="n">9.9 % (5.7°)</td><td class="n">0 mm</td><td><span class="tag good">통과</span></td></tr>
+<tr><td>후방 진입 (보도→램프 꺾임점)</td><td>램프 상단 경계</td><td class="n">경사 변화 6.2 %p</td><td class="n">0 mm</td><td><span class="tag good">통과</span></td></tr>
+<tr><td><i>참고 — 현행 웨지</i></td><td>웨지 측면(차도 위)</td><td class="n">—</td><td class="n">측면 수직벽 최대 93 mm</td><td><span class="tag bad">걸림</span></td></tr>
+</table></div>
+<div class="note"><b>여유율</b> — 최악 경사 5.7°는 Go2/COCO의 등판 한계(&gt;30°)의 15 % 수준이며,
+시뮬레이션에서 문제였던 것은 경사가 아니라 <b>수직 립과 PhysX 충돌 형상</b>이다.
+본 안은 기하학적으로 립을 제거해 원인 자체를 없앤다.</div>
+
+<h2><span class="no">05</span>치수 요약</h2>
+<div class="scroll"><table>
+<tr><th>항목</th><th>값</th><th>근거</th></tr>
+<tr><td>보도 두께(연석 높이)</td><td class="n">105 mm</td><td>기존 70 mm의 1.5배 — 요구사항</td></tr>
+<tr><td>절개부 본선 폭</td><td class="n">4.0 m</td><td>횡단보도 밴드 깊이(depth)와 동일 — 요구사항</td></tr>
+<tr><td>램프 런(run)</td><td class="n">1.5 m</td><td>보행등 폴(연석서 1.6 m)·볼라드(2.0 m)가 절개부 밖 평탄면에 남는 최대 런; 통행대 1.5 m</td></tr>
+<tr><td>높이차 Δh</td><td class="n">93 mm</td><td>보도 상면 105 − 횡단보도 도색면 12</td></tr>
+<tr><td>본선 경사</td><td class="n">6.2 % (3.5°)</td><td>93 / 1500</td></tr>
+<tr><td>플레어 폭(편측)</td><td class="n">1.2 m</td><td>연석선상 경사 7.75 % ≤ 실도로 기준(8.3 %, 1:12)</td></tr>
+<tr><td>연석선 점유 총폭</td><td class="n">6.4 m</td><td>1.2 + 4.0 + 1.2 — 인접 보행등·볼라드(측방 ≥2.6 m 밖) 간섭 없음 확인 예정</td></tr>
+<tr><td>적용 개소</td><td class="n">28</td><td>횡단보도 14 × 양단 (차량 진입 2·공사 우회 2개소는 현행 유지)</td></tr>
+</table></div>
+
+<h2><span class="no">06</span>구현 (v5.3 빌드로 반영)</h2>
+<ol>
+<li><b>보도 슬래브 분할</b> — build_city.py에서 각 횡단보도 끝의 6.0 m 구간을 슬래브에서 제외하고 절개부 지오메트리로 대체.</li>
+<li><b>본선 램프</b> — 검증된 box_mesh 피치 회전 방식(2.3°)으로 생성. 커스텀 웨지의 PhysX 쿠킹 실패 전력을 회피.</li>
+<li><b>플레어</b> — 뒤틀린 면을 삼각형 2매(평면 보장)로 분할한 프리즘 메시. 면 와인딩(법선 상향)을 명시 검증.</li>
+<li><b>레이아웃 반영</b> — city_layout.json의 ramps(why=crosswalk 28개)를 curb_cut 타입(폭 4.0·런 1.6·플레어 1.0)으로 갱신.</li>
+<li><b>물리 검증</b> — /goto 낙하 z-안착 테스트(보도 0.297 기준) + 정면·종주·대각 3방향 연속 주행 + 렌더 확인.</li>
+</ol>
+
+<footer>go2_city_sim · 도면 GCS-R-01 rev.0 · 2026-07-27 · 수치는 city_layout.json(crosswalk depth 4.0, 보도 3.0, CURB 105 mm=1.5×) 기준 · rev.1 as-built</footer>
+</div>
