@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.log
+city_static.usd
+shots/
+!docs/shots/
+.DS_Store

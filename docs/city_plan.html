@@ -1,0 +1,126 @@
+<title>신호 운영 계획 v1 — 루프 코스 도시</title>
+<style>
+:root { --paper:#F5F4EF; --panel:#FFF; --ink:#23282D; --ink2:#4C555E; --ink3:#6B7681; --line:#DDD9CE;
+ --grass:#A9BE93; --block:#DFDACC; --walk:#CFC8B8; --road:#4A5058; --brick:#B37A5E; --zebra:#F2EFE6;
+ --coco:#D92D20; --red:#E5484D; --yel:#F5B62E; --grn:#30A46C; --off:#3A3F45; }
+@media (prefers-color-scheme: dark) { :root { --paper:#191C20; --panel:#22262B; --ink:#E8E6E1; --ink2:#B9BDC2;
+ --ink3:#8C949C; --line:#3A3F45; --grass:#4A5A42; --block:#3A3D40; --walk:#4E4C45; --road:#23272C;
+ --brick:#7E5745; --zebra:#C9C5B8; --coco:#F2555A; --off:#15171A; } }
+:root[data-theme="dark"] { --paper:#191C20; --panel:#22262B; --ink:#E8E6E1; --ink2:#B9BDC2; --ink3:#8C949C;
+ --line:#3A3F45; --grass:#4A5A42; --block:#3A3D40; --walk:#4E4C45; --road:#23272C; --brick:#7E5745;
+ --zebra:#C9C5B8; --coco:#F2555A; --off:#15171A; }
+:root[data-theme="light"] { --paper:#F5F4EF; --panel:#FFF; --ink:#23282D; --ink2:#4C555E; --ink3:#6B7681;
+ --line:#DDD9CE; --grass:#A9BE93; --block:#DFDACC; --walk:#CFC8B8; --road:#4A5058; --brick:#B37A5E;
+ --zebra:#F2EFE6; --coco:#D92D20; --off:#3A3F45; }
+* { box-sizing:border-box; }
+body { background:var(--paper); color:var(--ink); margin:0; padding:26px 18px 60px;
+ font-family:"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif; line-height:1.55; }
+main { max-width:1080px; margin:0 auto; }
+h1 { font-size:1.4rem; margin:0 0 4px; text-wrap:balance; }
+.sub { color:var(--ink2); font-size:0.92rem; margin:0 0 16px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:16px; }
+#map { width:100%; height:auto; display:block; border-radius:6px; }
+.il { font:700 15px sans-serif; fill:#fff; text-anchor:middle; paint-order:stroke; stroke:#0008; stroke-width:3px; }
+#bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+#tl { flex:1 1 420px; height:34px; border-radius:7px; overflow:hidden; display:flex; position:relative; min-width:300px; cursor:pointer; }
+.seg { height:100%; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700; color:#fff; text-shadow:0 1px 2px #0007; }
+#cursor { position:absolute; top:0; bottom:0; width:2.5px; background:#fff; box-shadow:0 0 4px #000a; }
+button { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:7px; padding:5px 14px; font-size:0.9rem; cursor:pointer; }
+button:hover { border-color:var(--ink3); }
+#clock { font-variant-numeric:tabular-nums; font-weight:700; min-width:88px; }
+table { border-collapse:collapse; width:100%; font-size:0.88rem; }
+th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); }
+th { font-size:0.78rem; letter-spacing:0.05em; color:var(--ink3); text-transform:uppercase; }
+td.n { font-variant-numeric:tabular-nums; }
+.dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:-1px; }
+.note { color:var(--ink2); font-size:0.88rem; }
+h2 { font-size:1.02rem; margin:22px 0 10px; }
+</style>
+<main>
+<h1>신호 운영 계획 v1.4 — 3페이즈 사이클 43.8초 (교차로 4개 동기화 · 비보호 좌회전)</h1>
+<p class="sub">▶ 재생을 누르면 아래 지도에서 차량등 16기·보행등 28기(횡단보도 양끝 대각 배치)가 실제 계획대로 순환합니다. 보행 페이즈에는 <b>모든 교차로의 보행신호가 동시에 녹색</b>이 됩니다(요청 반영).</p>
+
+<div class="card">
+<div id="bar">
+  <button id="play">⏸ 일시정지</button>
+  <button id="speed">배속 ×4</button>
+  <span id="clock">t = 0.0s</span>
+  <div id="tl"></div>
+  <span id="phase" style="font-weight:700"></span>
+</div>
+<svg id="map" viewBox="0 0 1232 1232" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="1232" height="1232" fill="var(--grass)" /><rect x="444" y="444" width="148" height="344" fill="var(--block)" /><rect x="640" y="444" width="148" height="344" fill="var(--block)" /><rect x="892" y="96" width="244" height="244" fill="var(--block)" /><rect x="96" y="96" width="244" height="244" fill="var(--block)" /><rect x="892" y="892" width="244" height="244" fill="var(--block)" /><rect x="96" y="892" width="244" height="244" fill="var(--block)" /><rect x="444" y="96" width="344" height="244" fill="var(--block)" /><rect x="892" y="444" width="244" height="344" fill="var(--block)" /><rect x="96" y="444" width="244" height="344" fill="var(--block)" /><rect x="444" y="892" width="344" height="244" fill="var(--block)" /><rect x="882" y="472" width="10" height="288" fill="var(--block)" /><rect x="472" y="340" width="288" height="10" fill="var(--block)" /><rect x="340" y="868" width="24" height="268" fill="var(--walk)" /><rect x="420" y="868" width="24" height="268" fill="var(--walk)" /><rect x="788" y="868" width="24" height="268" fill="var(--walk)" /><rect x="340" y="420" width="24" height="392" fill="var(--walk)" /><rect x="420" y="420" width="24" height="392" fill="var(--walk)" /><rect x="788" y="420" width="24" height="392" fill="var(--walk)" /><rect x="340" y="96" width="24" height="268" fill="var(--walk)" /><rect x="420" y="96" width="24" height="268" fill="var(--walk)" /><rect x="788" y="96" width="24" height="268" fill="var(--walk)" /><rect x="868" y="868" width="24" height="268" fill="var(--walk)" /><rect x="868" y="760" width="24" height="52" fill="var(--walk)" /><rect x="868" y="420" width="24" height="52" fill="var(--walk)" /><rect x="868" y="96" width="24" height="268" fill="var(--walk)" /><rect x="96" y="420" width="244" height="24" fill="var(--walk)" /><rect x="444" y="420" width="148" height="24" fill="var(--walk)" /><rect x="640" y="420" width="148" height="24" fill="var(--walk)" /><rect x="892" y="420" width="244" height="24" fill="var(--walk)" /><rect x="96" y="340" width="244" height="24" fill="var(--walk)" /><rect x="444" y="340" width="28" height="24" fill="var(--walk)" /><rect x="760" y="340" width="28" height="24" fill="var(--walk)" /><rect x="892" y="340" width="244" height="24" fill="var(--walk)" /><rect x="96" y="788" width="244" height="24" fill="var(--walk)" /><rect x="444" y="788" width="148" height="24" fill="var(--walk)" /><rect x="640" y="788" width="148" height="24" fill="var(--walk)" /><rect x="892" y="788" width="244" height="24" fill="var(--walk)" /><rect x="96" y="868" width="244" height="24" fill="var(--walk)" /><rect x="444" y="868" width="344" height="24" fill="var(--walk)" /><rect x="892" y="868" width="244" height="24" fill="var(--walk)" /><rect x="868" y="472" width="14" height="288" fill="var(--walk)" /><rect x="472" y="350" width="288" height="14" fill="var(--walk)" /><rect x="364" y="364" width="56" height="784" fill="var(--road)" /><rect x="812" y="84" width="56" height="784" fill="var(--road)" /><rect x="84" y="364" width="1064" height="56" fill="var(--road)" /><rect x="84" y="812" width="1064" height="56" fill="var(--road)" /><rect x="28" y="28" width="56" height="1176" fill="var(--road)" /><rect x="1148" y="28" width="56" height="1176" fill="var(--road)" /><rect x="84" y="28" width="1064" height="56" fill="var(--road)" /><rect x="84" y="1148" width="1064" height="56" fill="var(--road)" /><rect x="364" y="84" width="56" height="280" fill="var(--brick)" /><rect x="812" y="868" width="56" height="280" fill="var(--brick)" /><rect x="592" y="420" width="48" height="392" fill="var(--brick)" /><rect x="367" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="378" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="389" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="400" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="412" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="367" y="904" width="6" height="32" fill="var(--zebra)" /><rect x="378" y="904" width="6" height="32" fill="var(--zebra)" /><rect x="389" y="904" width="6" height="32" fill="var(--zebra)" /><rect x="400" y="904" width="6" height="32" fill="var(--zebra)" /><rect x="412" y="904" width="6" height="32" fill="var(--zebra)" /><rect x="456" y="860" width="32" height="6" fill="var(--zebra)" /><rect x="456" y="848" width="32" height="6" fill="var(--zebra)" /><rect x="456" y="837" width="32" height="6" fill="var(--zebra)" /><rect x="456" y="826" width="32" height="6" fill="var(--zebra)" /><rect x="456" y="815" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="860" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="848" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="837" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="826" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="815" width="32" height="6" fill="var(--zebra)" /><rect x="367" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="378" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="389" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="400" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="412" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="456" y="412" width="32" height="6" fill="var(--zebra)" /><rect x="456" y="400" width="32" height="6" fill="var(--zebra)" /><rect x="456" y="389" width="32" height="6" fill="var(--zebra)" /><rect x="456" y="378" width="32" height="6" fill="var(--zebra)" /><rect x="456" y="367" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="412" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="400" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="389" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="378" width="32" height="6" fill="var(--zebra)" /><rect x="296" y="367" width="32" height="6" fill="var(--zebra)" /><rect x="815" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="826" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="837" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="848" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="860" y="744" width="6" height="32" fill="var(--zebra)" /><rect x="904" y="860" width="32" height="6" fill="var(--zebra)" /><rect x="904" y="848" width="32" height="6" fill="var(--zebra)" /><rect x="904" y="837" width="32" height="6" fill="var(--zebra)" /><rect x="904" y="826" width="32" height="6" fill="var(--zebra)" /><rect x="904" y="815" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="860" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="848" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="837" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="826" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="815" width="32" height="6" fill="var(--zebra)" /><rect x="815" y="296" width="6" height="32" fill="var(--zebra)" /><rect x="826" y="296" width="6" height="32" fill="var(--zebra)" /><rect x="837" y="296" width="6" height="32" fill="var(--zebra)" /><rect x="848" y="296" width="6" height="32" fill="var(--zebra)" /><rect x="860" y="296" width="6" height="32" fill="var(--zebra)" /><rect x="815" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="826" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="837" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="848" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="860" y="456" width="6" height="32" fill="var(--zebra)" /><rect x="904" y="412" width="32" height="6" fill="var(--zebra)" /><rect x="904" y="400" width="32" height="6" fill="var(--zebra)" /><rect x="904" y="389" width="32" height="6" fill="var(--zebra)" /><rect x="904" y="378" width="32" height="6" fill="var(--zebra)" /><rect x="904" y="367" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="412" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="400" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="389" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="378" width="32" height="6" fill="var(--zebra)" /><rect x="744" y="367" width="32" height="6" fill="var(--zebra)" /><polyline points="696,800 800,800 800,760 875,760 875,432 920,432 920,352 312,352 312,472 432,472 432,432 616,432 616,800 696,800" fill="none" stroke="var(--coco)" stroke-width="3" opacity="0.28"/><line x1="458" y1="774" x2="418" y2="774" stroke="var(--ink3)" stroke-width="2"/><circle cx="458" cy="774" r="2.6" fill="var(--ink)"/><line x1="458" y1="906" x2="458" y2="866" stroke="var(--ink3)" stroke-width="2"/><circle cx="458" cy="906" r="2.6" fill="var(--ink)"/><line x1="326" y1="774" x2="326" y2="814" stroke="var(--ink3)" stroke-width="2"/><circle cx="326" cy="774" r="2.6" fill="var(--ink)"/><line x1="326" y1="906" x2="366" y2="906" stroke="var(--ink3)" stroke-width="2"/><circle cx="326" cy="906" r="2.6" fill="var(--ink)"/><line x1="458" y1="326" x2="418" y2="326" stroke="var(--ink3)" stroke-width="2"/><circle cx="458" cy="326" r="2.6" fill="var(--ink)"/><line x1="458" y1="458" x2="458" y2="418" stroke="var(--ink3)" stroke-width="2"/><circle cx="458" cy="458" r="2.6" fill="var(--ink)"/><line x1="326" y1="326" x2="326" y2="366" stroke="var(--ink3)" stroke-width="2"/><circle cx="326" cy="326" r="2.6" fill="var(--ink)"/><line x1="906" y1="906" x2="906" y2="866" stroke="var(--ink3)" stroke-width="2"/><circle cx="906" cy="906" r="2.6" fill="var(--ink)"/><line x1="774" y1="774" x2="774" y2="814" stroke="var(--ink3)" stroke-width="2"/><circle cx="774" cy="774" r="2.6" fill="var(--ink)"/><line x1="774" y1="906" x2="814" y2="906" stroke="var(--ink3)" stroke-width="2"/><circle cx="774" cy="906" r="2.6" fill="var(--ink)"/><line x1="906" y1="326" x2="866" y2="326" stroke="var(--ink3)" stroke-width="2"/><circle cx="906" cy="326" r="2.6" fill="var(--ink)"/><line x1="906" y1="458" x2="906" y2="418" stroke="var(--ink3)" stroke-width="2"/><circle cx="906" cy="458" r="2.6" fill="var(--ink)"/><line x1="774" y1="326" x2="774" y2="366" stroke="var(--ink3)" stroke-width="2"/><circle cx="774" cy="326" r="2.6" fill="var(--ink)"/><line x1="774" y1="458" x2="814" y2="458" stroke="var(--ink3)" stroke-width="2"/><circle cx="774" cy="458" r="2.6" fill="var(--ink)"/><line x1="326" y1="458" x2="366" y2="458" stroke="var(--ink3)" stroke-width="2"/><circle cx="326" cy="458" r="2.6" fill="var(--ink)"/><line x1="906" y1="774" x2="866" y2="774" stroke="var(--ink3)" stroke-width="2"/><circle cx="906" cy="774" r="2.6" fill="var(--ink)"/><text x="392" y="844" class="il">SW</text><text x="392" y="396" class="il">NW</text><text x="840" y="844" class="il">SE</text><text x="840" y="396" class="il">NE</text></svg>
+</div>
+
+<h2>페이즈 구성 (사이클 42초, 전 교차로 공통 시계)</h2>
+<table>
+<thead><tr><th>페이즈</th><th class="n">구간</th><th>차량등 (남북 그룹)</th><th>차량등 (동서 그룹)</th><th>보행등 (전 방향)</th></tr></thead>
+<tbody>
+<tr><td><b>V1 남북 통행</b></td><td class="n">0–10s</td><td><span class="dot" style="background:var(--grn)"></span>녹색</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td></tr>
+<tr><td>V1 황색</td><td class="n">10–13s</td><td><span class="dot" style="background:var(--yel)"></span>황색</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td></tr>
+<tr><td>전적색 ①</td><td class="n">13–14s</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td></tr>
+<tr><td><b>V2 동서 통행</b></td><td class="n">14–24s</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--grn)"></span>녹색</td><td><span class="dot" style="background:var(--red)"></span>적색</td></tr>
+<tr><td>V2 황색</td><td class="n">24–27s</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--yel)"></span>황색</td><td><span class="dot" style="background:var(--red)"></span>적색</td></tr>
+<tr><td>전적색 ②</td><td class="n">27–28s</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td></tr>
+<tr><td><b>P 동시 보행</b></td><td class="n">28–36s</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--grn)"></span><b>전 방향 녹색</b></td></tr>
+<tr><td>P 녹색 점멸 (기본 5.8s = 횡단보도 7m ÷ COCO 1.2m/s, <b>파라미터로 조절</b>)</td><td class="n">36–41.8s</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--grn)"></span>점멸 (카운트다운 4s)</td></tr>
+<tr><td>전적색 ③</td><td class="n">41.8–43.8s</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td><td><span class="dot" style="background:var(--red)"></span>적색</td></tr>
+</tbody>
+</table>
+
+<h2>운영 규칙</h2>
+<p class="note">
+① <b>동시 보행(스크램블) 방식</b>: 보행 페이즈에는 차량등 14기가 전부 적색, 보행등 14기가 전부 녹색 — 교차로마다 모든 횡단보도를 한 번에 건널 수 있습니다.
+② <b>전 교차로 동기화</b>: 4개 교차로가 같은 전역 시계를 공유합니다(위상차 0). COCO·보행자·차량 데이터가 예측 가능해집니다.
+③ <b>T자 교차로(북서·남동)</b>: 프롬나드 접속 팔은 차량이 없으므로 해당 방향 차량등이 없고(코너 2기 생략), 존재하는 접근로에는 동일 사이클이 적용됩니다.
+④ <b>외곽 링·비신호 접속부</b>: 링 도로와 보차혼용길 진입은 무신호(서행·양보). 차량 루프(V1~V5)는 신호에 따라 정지선에서 대기합니다.
+⑤ <b>구현 방식</b>: 차량등은 전구 프림 visibility 토글(적/황/녹 개별 USD), 보행등(횡단보도당 양끝 2기, 서로 반대편向 대각 배치)은 asa21 실사 모델 + 상태별 검은 커버 오버레이(항상 켜진 LED 텍스처에서 비활성 표시만 가림; red/grn/cnt/off 그룹 토글) + 점멸은 1s 주기(1Hz, 실제 신호기와 동일). 텔레옵 루프에 42초 전역 타이머 훅으로 넣습니다(기존 검증된 방식).
+⑥ <b>좌회전 = 비보호 좌회전</b>: 차량 신호등은 3구(적·황·녹)로 좌회전 화살표 없음 — 왕복 2차로 도로 특성상 녹색 시 대향차가 없을 때 좌회전(5단계 차량 로직에 반영). 
+⑦ <b>보행 점멸 시간 파라미터</b>: 기본값 = 횡단보도 길이(7m) ÷ COCO 속도(1.2m/s) ≈ 5.8초. 런타임에 <code>POST /sigcfg {"blink": 초}</code>로 조절되며 사이클 길이(38+blink)도 함께 변함. 
+⑧ COCO 학습 시나리오: S4(신호 횡단)는 P 페이즈에만 진행해야 정답 — 위반(차량 페이즈 중 진입) 라벨링이 자연스럽게 가능합니다.
+</p>
+</main>
+<script>
+const VEH = [{"x": 418, "y": 774, "g": "NS"}, {"x": 458, "y": 866, "g": "EW"}, {"x": 326, "y": 814, "g": "EW"}, {"x": 366, "y": 906, "g": "NS"}, {"x": 418, "y": 326, "g": "NS"}, {"x": 458, "y": 418, "g": "EW"}, {"x": 326, "y": 366, "g": "EW"}, {"x": 906, "y": 866, "g": "EW"}, {"x": 774, "y": 814, "g": "EW"}, {"x": 814, "y": 906, "g": "NS"}, {"x": 866, "y": 326, "g": "NS"}, {"x": 906, "y": 418, "g": "EW"}, {"x": 774, "y": 366, "g": "EW"}, {"x": 814, "y": 458, "g": "NS"}, {"x": 366, "y": 458, "g": "NS"}, {"x": 866, "y": 774, "g": "NS"}];
+const PED = [{"x": 433, "y": 739}, {"x": 351, "y": 781}, {"x": 351, "y": 941}, {"x": 433, "y": 899}, {"x": 451, "y": 799}, {"x": 493, "y": 881}, {"x": 333, "y": 881}, {"x": 291, "y": 799}, {"x": 351, "y": 493}, {"x": 433, "y": 451}, {"x": 451, "y": 351}, {"x": 493, "y": 433}, {"x": 333, "y": 433}, {"x": 291, "y": 351}, {"x": 881, "y": 739}, {"x": 799, "y": 781}, {"x": 899, "y": 799}, {"x": 941, "y": 881}, {"x": 781, "y": 881}, {"x": 739, "y": 799}, {"x": 881, "y": 291}, {"x": 799, "y": 333}, {"x": 799, "y": 493}, {"x": 881, "y": 451}, {"x": 899, "y": 351}, {"x": 941, "y": 433}, {"x": 781, "y": 433}, {"x": 739, "y": 351}];
+const CYCLE = 43.8;
+const SEGS = [
+ ["V1 남북", 0, 10, "var(--grn)", "NS"], ["황", 10, 13, "var(--yel)", "NSy"], ["", 13, 14, "var(--red)", "AR"],
+ ["V2 동서", 14, 24, "var(--grn)", "EW"], ["황", 24, 27, "var(--yel)", "EWy"], ["", 27, 28, "var(--red)", "AR"],
+ ["P 동시 보행", 28, 36, "#2C8ADB", "PED"], ["점멸", 36, 41.8, "#2C8ADB", "PEDF"], ["", 41.8, 43.8, "var(--red)", "AR"]];
+const svgEl = document.getElementById("map");
+const NS = "http://www.w3.org/2000/svg";
+function mk(x, y, r) { const c = document.createElementNS(NS, "circle");
+ c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", r);
+ c.setAttribute("stroke", "#fff"); c.setAttribute("stroke-width", "1.4"); svgEl.appendChild(c); return c; }
+const vehEls = VEH.map(v => mk(v.x, v.y, 6.5));
+const pedEls = PED.map(p => mk(p.x, p.y, 5.5));
+const tl = document.getElementById("tl");
+for (const [nm, a, b, col] of SEGS) {
+  const d = document.createElement("div"); d.className = "seg";
+  d.style.width = ((b - a) / CYCLE * 100) + "%"; d.style.background = col; d.textContent = nm;
+  tl.appendChild(d); }
+const cur = document.createElement("div"); cur.id = "cursor"; tl.appendChild(cur);
+let t = 0, playing = true, speed = 1, last = performance.now();
+tl.addEventListener("click", e => { const r = tl.getBoundingClientRect(); t = (e.clientX - r.left) / r.width * CYCLE; });
+document.getElementById("play").onclick = e => { playing = !playing; e.target.textContent = playing ? "⏸ 일시정지" : "▶ 재생"; };
+document.getElementById("speed").onclick = e => { speed = speed === 1 ? 4 : 1; e.target.textContent = "배속 ×" + (speed === 1 ? 4 : 1); };
+function phaseAt(t) { for (const s of SEGS) if (t >= s[1] && t < s[2]) return s; return SEGS[0]; }
+function tick(now) {
+  if (playing) t = (t + (now - last) / 1000 * speed) % CYCLE;
+  last = now;
+  const ph = phaseAt(t), key = ph[4];
+  const blinkOn = Math.floor(t) % 2 === 0;
+  let vNS = "var(--red)", vEW = "var(--red)", pd = "var(--red)", pdOp = 1;
+  if (key === "NS") vNS = "var(--grn)"; else if (key === "NSy") vNS = "var(--yel)";
+  else if (key === "EW") vEW = "var(--grn)"; else if (key === "EWy") vEW = "var(--yel)";
+  else if (key === "PED") pd = "var(--grn)";
+  else if (key === "PEDF") { pd = "var(--grn)"; pdOp = blinkOn ? 1 : 0.25; }
+  vehEls.forEach((el, i) => el.setAttribute("fill", VEH[i].g === "NS" ? vNS : vEW));
+  pedEls.forEach(el => { el.setAttribute("fill", pd); el.setAttribute("opacity", pdOp); });
+  cur.style.left = (t / CYCLE * 100) + "%";
+  document.getElementById("clock").textContent = "t = " + t.toFixed(1) + "s";
+  document.getElementById("phase").textContent = key === "AR" ? "전적색" : ph[0];
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>

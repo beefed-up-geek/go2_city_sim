@@ -1,0 +1,28 @@
+Task: Navigation
+Env:
+  name: clean
+  map_region: 20
+  num_objects: 0
+  num_peds: 0
+Robot:
+  type: coco
+  controller: default
+  sensor: default
+  tiled_sensor: True
+
+  init_position: [207., 210., 0.6]
+Omniverse:
+  headless: True
+  simulation_dt: 0.005
+  rendering_interval: 10
+  decimation: 20
+  episode_length_s: 30.0
+  env_spacing: 31.0
+  scenario_generation_method: limited sync procedural generation
+Training:
+  framework: rl_games
+  training_config_entry: default
+  use_gpu: True
+  num_envs: 1
+  num_gpu: 1
+  use_ddp: False
