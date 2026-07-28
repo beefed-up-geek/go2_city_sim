@@ -22,7 +22,11 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-export TRAFFIC_CARS TRAFFIC_PEDS TRAFFIC_N_CARS TRAFFIC_N_PEDS TRAFFIC_SPEED
+TRAFFIC_PED_ASSET="${TRAFFIC_PED_ASSET:-anim}"     # anim | plain | mix
+# 보행자 애니메이션(NVIDIA People)에 필요한 확장 — 반드시 Kit 기동 시점에 켜야 한다.
+# 기동 후 enable_extension 으로 켜면 OGN 노드 등록이 실패하고 그래프 실행에서 죽는다.
+KIT_ARGS="--enable omni.anim.graph.bundle --enable omni.anim.retarget.bundle"
+export TRAFFIC_CARS TRAFFIC_PEDS TRAFFIC_N_CARS TRAFFIC_N_PEDS TRAFFIC_SPEED TRAFFIC_PED_ASSET KIT_ARGS
 echo "[runner] traffic cars=$TRAFFIC_CARS peds=$TRAFFIC_PEDS n_cars=${TRAFFIC_N_CARS:-기본} n_peds=${TRAFFIC_N_PEDS:-기본} speed=$TRAFFIC_SPEED"
 WS="${URBANSIM_WS_HOST:-/home/gty/urban_sim}"
 REL="$(realpath --relative-to="$WS" "$REPO")"
@@ -41,7 +45,8 @@ for r in 1 2 3 4 5 6; do
   echo "go2_web launch #$r $(date)" >> "$WS/pipeline_state.log"
   docker exec -e GO2CITY_ROOT="$REPO_CT" -e PYTHONPATH="/workspace/urban-sim/meta_source/metaurban/metaurban/orca_algo/build" \
     -e TRAFFIC_CARS="$TRAFFIC_CARS" -e TRAFFIC_PEDS="$TRAFFIC_PEDS" -e TRAFFIC_N_CARS="$TRAFFIC_N_CARS" \
-    -e TRAFFIC_N_PEDS="$TRAFFIC_N_PEDS" -e TRAFFIC_SPEED="$TRAFFIC_SPEED" urbansim bash -c "cd /workspace/urban-sim && /isaac-sim/python.sh urbansim/learning/RL/go2_web.py --env configs/env_configs/navigation/go2_web.yaml --headless --enable_cameras --num_envs 1" > "$WS/go2_web.log" 2>&1
+    -e TRAFFIC_N_PEDS="$TRAFFIC_N_PEDS" -e TRAFFIC_SPEED="$TRAFFIC_SPEED" \
+    -e TRAFFIC_PED_ASSET="$TRAFFIC_PED_ASSET" urbansim bash -c "cd /workspace/urban-sim && /isaac-sim/python.sh urbansim/learning/RL/go2_web.py --env configs/env_configs/navigation/go2_web.yaml --headless --enable_cameras --num_envs 1 --kit_args \"$KIT_ARGS\"" > "$WS/go2_web.log" 2>&1
   echo "EXIT:$? at $(date)" >> "$WS/go2_web.log"
   echo "GO2_EXITED #$r $(date)" >> "$WS/pipeline_state.log"
   sleep 8

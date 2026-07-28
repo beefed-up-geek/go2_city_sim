@@ -23,6 +23,8 @@ URBANSIM_ZIP = "https://huggingface.co/datasets/Hollis71025/URBAN-SIM-Assets/res
 ASA21_GLB = ("https://huggingface.co/datasets/allenai/objaverse/resolve/main/"
              "glbs/000-078/2f720ea69cb2407ba8598c02305ce524.glb")
 
+PEOPLE = f"{REPO}/assets/usd/people"   # 보행자 캐릭터·걷기 클립·애니메이션 그래프
+
 TREES = ["Japanese_Cherry", "Honey_Locust", "American_Beech", "Japanese_Maple", "Gray_Birch"]
 SHRUBS = ["Boxwood", "Barberry", "Forsythia", "Hibiscus", "Goldflame_Spirea", "Fraser_Photina"]
 S3_JOBS = [  # (ROOT 하위 prefix, 부분문자열 필터 또는 None=전체)
@@ -60,6 +62,11 @@ def manifest():
         ("저장소 레이아웃", f"{REPO}/assets/city_layout.json"),
         ("저장소 asa21 GLB", f"{REPO}/assets/src/ped_light_asa21.glb"),
         ("저장소 보행등 USD", f"{REPO}/assets/usd/ped_light_asa21/ped_light_asa21.usd"),
+        ("People 애니메이션 그래프", f"{PEOPLE}/Characters/Biped_Setup.usd"),
+        ("People 그래프 기준 캐릭터", f"{PEOPLE}/Characters/biped_demo/biped_demo_meters.usd"),
+        ("People 제자리 걷기 클립", f"{PEOPLE}/Animations/stand_walk_loop_in_place.skelanim.usd"),
+        ("People 걷기 클립 24종", f"{PEOPLE}/Animations", "dir_min20"),
+        ("People 캐릭터 10종", f"{PEOPLE}/Characters", "dir_min10"),
     ]
     # 저장소 변환 USD: 레이아웃이 참조하는 건물·가구·차량 전부
     import json
@@ -77,7 +84,8 @@ def check(verbose=True):
     for row in manifest():
         name, path, kind = (row + ("file",))[:3]
         if kind == "dir": good = os.path.isdir(path) and bool(os.listdir(path))
-        elif kind == "dir_min100": good = os.path.isdir(path) and len(os.listdir(path)) >= 100
+        elif kind.startswith("dir_min"):
+            good = os.path.isdir(path) and len(os.listdir(path)) >= int(kind[7:])
         else: good = os.path.isfile(path) and os.path.getsize(path) > 0
         if good: ok += 1
         else:
@@ -118,6 +126,28 @@ def pull_nvidia():
                 fail += 1; print(f"[nvidia] 실패 {rel}: {e}", flush=True)
     print(f"[nvidia] 신규 {done} · 보유 {skip} · 실패 {fail}", flush=True)
 
+# ---------- NVIDIA People(보행자) ----------
+def pull_people():
+    """캐릭터·걷기 클립·Biped_Setup(AnimationGraph). Biped_Setup 은 Animations 전체와
+    biped_demo 를 페이로드로 참조하므로 셋 다 받아야 한다.
+    original_* 은 리타게팅 전 원본(같은 인물)이라 제외한다."""
+    base = S3ROOT + "Isaac/People/"
+    done = skip = fail = 0
+    for key, size in s3_keys("Isaac/People/"):
+        rel = key[len(base):]
+        if "/.thumbs/" in rel or rel.startswith(".") or not rel: continue
+        if rel.startswith(("DH_Characters", "Characters/original_")): continue
+        out = f"{PEOPLE}/{rel}"
+        if os.path.exists(out) and os.path.getsize(out) == size:
+            skip += 1; continue
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        try:
+            urllib.request.urlretrieve(f"{S3}/{urllib.parse.quote(key)}", out); done += 1
+            if done % 20 == 0: print(f"[people] {done}개 수신 중…", flush=True)
+        except Exception as e:
+            fail += 1; print(f"[people] 실패 {rel}: {e}", flush=True)
+    print(f"[people] 신규 {done} · 보유 {skip} · 실패 {fail}", flush=True)
+
 # ---------- URBAN-SIM 팩 ----------
 def pull_urbansim(keep_zip):
     have = (os.path.isdir(f"{WS}/assets/objects") and len(os.listdir(f"{WS}/assets/objects")) >= 100
@@ -151,6 +181,7 @@ if __name__ == "__main__":
     if a.check:
         sys.exit(1 if check() else 0)
     pull_nvidia()
+    pull_people()
     pull_urbansim(a.keep_zip)
     pull_asa21()
     print("[정리] 규격 배치 완료 여부 검증:", flush=True)
