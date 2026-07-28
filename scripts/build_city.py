@@ -482,6 +482,18 @@ for i, b in enumerate(L["buildings"]):  # 실측 native 크기 그대로
     asset = b["asset"]
     if asset not in protos_b:
         protos_b[asset] = make_proto(f"bld_{asset[9:17]}", f"{CUSTOM}/objects/{asset}/{asset}.usd")
+        # GLB 폭주 메시 가드(프로토 단계 → 전 인스턴스 전파): 60 m 넘는 메시는 깨진 지오메트리
+        _bc9 = UsdGeom.BBoxCache(Usd.TimeCode.Default(), ["default", "render", "proxy"])
+        for _pr9 in Usd.PrimRange(stage.GetPrimAtPath(f"/World/_protos/{protos_b[asset]}")):
+            if not _pr9.IsA(UsdGeom.Mesh): continue
+            _r9 = _bc9.ComputeWorldBound(_pr9).ComputeAlignedRange()
+            if _r9.IsEmpty(): continue
+            _mn9, _mx9 = _r9.GetMin(), _r9.GetMax()
+            _ext9 = max(_mx9[0]-_mn9[0], _mx9[1]-_mn9[1], _mx9[2]-_mn9[2])
+            if _ext9 > 60.0:
+                UsdGeom.Imageable(_pr9).MakeInvisible()
+                UsdPhysics.CollisionAPI.Apply(_pr9).CreateCollisionEnabledAttr(False)
+                print(f"[guard] runaway mesh hidden in {protos_b[asset]}: {_pr9.GetName()} {_ext9:.0f}m", flush=True)
     place(f"/World/Buildings/B{i}", protos_b[asset], b["pos"][0], b["pos"][1], CURB, yaw=b["rot"], instanceable=False)
     _bf = PROTO_FP.get(protos_b[asset])
     if _bf:
