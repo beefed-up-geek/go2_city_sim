@@ -126,6 +126,44 @@ try:
                 _UG2.Imageable(_pr5).MakeInvisible()
     print(f"[city] city_static referenced + env patch hidden + colliders off: {_ndis} | swept={_swept}", flush=True)
     print(f"[city] origin obstacles removed: {_origin_hits}", flush=True)
+    # env 하위 URBAN-SIM 지형(보도/보행로 패치)도 제거 — 도시 노면 위에 겹쳐 뜨는 원인
+    _terr = []
+    if _envp and _envp.IsValid():
+        for _pr7 in _Usd4.PrimRange(_envp):
+            _n7 = _pr7.GetName()
+            _p7 = _pr7.GetPath().pathString
+            if "obot" in _p7 or "oco" in _p7: continue
+            if not _n7.lower().startswith(("walkable", "nonwalkable", "obstacle", "terrain",
+                                           "ground", "sidewalk", "plane", "road", "block")):
+                continue
+            try:
+                if _pr7.IsInstanceable(): _pr7.SetInstanceable(False)
+            except Exception: pass
+            for _q7 in _Usd4.PrimRange(_pr7):
+                if _q7.HasAPI(_UPh.CollisionAPI):
+                    _UPh.CollisionAPI(_q7).CreateCollisionEnabledAttr(False)
+                elif _q7.IsA(_UG2.Mesh):
+                    _UPh.CollisionAPI.Apply(_q7).CreateCollisionEnabledAttr(False)
+            _UG2.Imageable(_pr7).MakeInvisible()
+            _terr.append(_n7)
+    print(f"[city] env terrain hidden: {_terr[:12]} (총 {len(_terr)})", flush=True)
+    # 진단: 도시(/World/City) 밖에서 골목 위에 보이는 프림 열거
+    try:
+        _bc7 = _UG2.BBoxCache(_Usd4.TimeCode.Default(), ["default", "render", "proxy"])
+        _found = []
+        for _pr6 in _t_stage.Traverse():
+            _p6 = _pr6.GetPath().pathString
+            if _p6.startswith("/World/City") or not _pr6.IsA(_UG2.Mesh): continue
+            _r6 = _bc7.ComputeWorldBound(_pr6).ComputeAlignedRange()
+            if _r6.IsEmpty(): continue
+            _a6, _b6 = _r6.GetMin(), _r6.GetMax()
+            if _a6[0] < 5 and _b6[0] > -5 and _a6[1] < 20 and _b6[1] > -20 and _a6[2] < 1.5 and _b6[2] > -0.5:
+                if _UG2.Imageable(_pr6).ComputeVisibility() == "invisible": continue
+                _found.append(f"{_p6[-58:]} x[{_a6[0]:.1f},{_b6[0]:.1f}] y[{_a6[1]:.1f},{_b6[1]:.1f}] z[{_a6[2]:.2f},{_b6[2]:.2f}]")
+        print(f"[diag] 골목 위 비도시 프림 {len(_found)}개:", flush=True)
+        for _f6 in _found[:15]: print("   ", _f6, flush=True)
+    except Exception as _e6:
+        print("[diag] 실패:", _e6, flush=True)
 except Exception as e:
     print("[city] failed:", e, flush=True)
 
@@ -488,6 +526,30 @@ print(f"[teleop] web serving on :{WEB_PORT}", flush=True)
 VX_FWD, VX_BACK, VY, WZ = 1.2, -0.6, 0.5, 1.0
 _tick_hist = []
 step_i = 0
+def _hide_env_terrain(tag=""):
+    """URBAN-SIM 지형 패치 은폐 — 환경이 리셋마다 다시 보이게 하므로 재적용 필요"""
+    try:
+        from pxr import UsdGeom as _UG8, Usd as _U8, UsdPhysics as _UP8
+        _st8 = omni.usd.get_context().get_stage()
+        _n8 = 0
+        for _c8 in _st8.GetPrimAtPath("/World").GetChildren():
+            _nm8 = _c8.GetName()
+            if _nm8.lower().startswith(("walkable", "nonwalkable", "obstacle", "terrain", "ground")):
+                for _q8 in _U8.PrimRange(_c8):
+                    if _q8.IsA(_UG8.Mesh):
+                        _UG8.Imageable(_q8).MakeInvisible()
+                        if _q8.HasAPI(_UP8.CollisionAPI):
+                            _UP8.CollisionAPI(_q8).CreateCollisionEnabledAttr(False)
+                        else:
+                            _UP8.CollisionAPI.Apply(_q8).CreateCollisionEnabledAttr(False)
+                        _n8 += 1
+                _UG8.Imageable(_c8).MakeInvisible()
+        if tag: print(f"[city] env terrain re-hidden{tag}: {_n8} meshes", flush=True)
+    except Exception as _e8:
+        print("[city] terrain hide 실패:", _e8, flush=True)
+
+_hide_env_terrain(" (init)")
+_terrain_recheck = [0]
 while simulation_app.is_running():
     t0 = time.monotonic()
     with _state_lock:
@@ -522,6 +584,9 @@ while simulation_app.is_running():
 
     try:
         _sig_step()
+        _terrain_recheck[0] += 1
+        if _terrain_recheck[0] in (30, 200, 900):     # 리셋 후 환경이 되살리는 것을 재차 은폐
+            _hide_env_terrain(f" (step {_terrain_recheck[0]})")
     except Exception as _se:
         pass
     if "town_signals" in globals():
