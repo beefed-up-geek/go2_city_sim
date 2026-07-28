@@ -30,7 +30,7 @@ Objaverse 데이터셋 자체는 **ODC-By 1.0**으로 배포된다
 |---|---|
 | 출처 | **URBAN-SIM** 프로젝트 배포 에셋(objects GLB 모음)을 USD로 변환 |
 | 프로젝트 | https://github.com/metadriverse/urban-sim (MetaDriverse, UCLA) |
-| 라이선스 | **Apache License 2.0** (URBAN-SIM 배포 기준 — 체크아웃의 LICENSE.txt) |
+| 라이선스 | **Apache License 2.0** — 원문 사본: [`licenses/URBAN-SIM.Apache-2.0.txt`](licenses/URBAN-SIM.Apache-2.0.txt) (NOTICE 파일 없음) |
 | 변환 | `scripts/convert_assets.py` (omni.kit.asset_converter), 폴더명 = 원본 GLB 파일명(UUID) |
 
 포함 폴더 (17):
