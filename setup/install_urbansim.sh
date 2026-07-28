@@ -31,6 +31,16 @@ $PY -m pip install -q --no-build-isolation -e .
 
 echo "== extras =="
 $PY -m pip install -q -r "$(dirname "$0")/../requirements.txt"
+# torch를 컨테이너 동봉 torchvision과 정합한 버전으로 복원(editable 설치가 올려놨을 수 있음)
+$PY -m pip install -q "torch==2.7.0" --index-url https://download.pytorch.org/whl/cu128
+$PY -m pip install -q "numpy==1.26.4" "typing_extensions==4.15.0"   # 재고정(위 설치가 되돌릴 수 있음)
+# Kit pip_prebundle의 typing_extensions 사본이 site-packages보다 우선 로드됨 — 동일 버전으로 교체
+SITE_TE=/isaac-sim/kit/python/lib/python3.11/site-packages/typing_extensions.py
+for f in /isaac-sim/exts/omni.pip.cloud/pip_prebundle/typing_extensions.py \
+         /isaac-sim/extscache/omni.services.pip_archive-*/pip_prebundle/typing_extensions.py; do
+  [ -f "$f" ] && cp -n "$f" "$f.bak" && cp "$SITE_TE" "$f"
+done
+apt-get install -y -qq git >/dev/null 2>&1 || true                  # isaaclab이 git 실행 파일 요구
 # metaurban ORCA 플래너의 C++ 모듈(bind.so) 경로 등록 — 빌드 산출물은 워크스페이스에 존재
 SITE=$($PY -c "import site; print(site.getsitepackages()[0])" 2>/dev/null | tail -1)
 echo "/workspace/urban-sim/meta_source/metaurban/metaurban/orca_algo/build" > "$SITE/orca_bind.pth" \

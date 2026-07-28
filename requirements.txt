@@ -1,19 +1,32 @@
-# go2_city_sim 추가 파이썬 의존성
-# Isaac Sim 5.0 컨테이너의 /isaac-sim/python.sh 환경에 설치한다:
+# go2_city_sim 추가 파이썬 의존성 (Isaac Sim 5.0 컨테이너의 /isaac-sim/python.sh 환경)
 #   /isaac-sim/python.sh -m pip install -r requirements.txt
-# (isaaclab·metaurban·urbansim 자체는 editable 설치 — setup/install_urbansim.sh가 처리)
+# 전체 고정 스냅샷: setup/requirements.lock.txt
 #
-# 검증된 전체 환경의 정확한 버전 고정은 setup/requirements.lock.txt 참조.
+# ⚠ 버전 핀은 전부 이유가 있음 — Isaac Kit 5.0 내장 스택과의 호환성:
+#   numpy<2        : Kit 동봉 pinocchio 등이 NumPy 1.x ABI로 빌드됨
+#   torch==2.7.0   : 컨테이너 동봉 torchvision/torchaudio 0.22.0/2.7.0+cu128과 정합
+#                    (별도 설치 시: --index-url https://download.pytorch.org/whl/cu128)
+#   typing_extensions==4.15.0 : 4.13/4.16은 torch 2.7 inductor와 충돌
+#                    (Kit pip_prebundle 사본 교체는 install_urbansim.sh가 수행)
+#   jax 0.4.x 계열 : 0.10.x는 ml_dtypes가 numpy>=2를 요구해 사용 불가
 
+numpy==1.26.4
+typing_extensions==4.15.0
+gym
+gymnasium
 stable_baselines3
+rsl-rl-lib
+rl-games
+skrl>=1.4.0
+jax==0.4.35
+jaxlib==0.4.35
+ml_dtypes==0.4.1
+chex==0.1.87
+optax==0.2.4
+flax==0.10.2
+distrax==0.1.5
 tensorboard
 scikit-image
 pyyaml
 gdown
 pybind11[global]
-jax
-jaxlib
-chex
-distrax
-optax
-flax
