@@ -7,19 +7,24 @@ enable_extension("omni.kit.asset_converter")
 import omni.kit.asset_converter as conv
 import asyncio, glob, os, sys
 
-SRC_CUSTOM = "/workspace/urban-sim/assets_custom"
-SRC_OBJ = "/workspace/urban-sim/assets/objects"
-OUT = "/workspace/urban-sim/assets_custom/usd"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # 저장소 루트
+BASE = os.environ.get("URBANSIM_WS", "/workspace/urban-sim")
+SRC_CUSTOM = f"{ROOT}/assets/src"                 # 저장소 동봉 GLB (asa21 등)
+SRC_OBJ = f"{BASE}/assets/objects"                # URBAN-SIM 원본 GLB 모음
+OUT = f"{ROOT}/assets/usd"
 CATS = ["Building_", "Bench_", "Trash_bin_", "TrashCan_", "busstation_", "Telephone_booth_", "Vending_machine_", "Mailbox_"]
+ONLY = set(sys.argv[1:])                          # 인자 지정 시 해당 이름만 변환
 
 jobs = []
 for g in sorted(glob.glob(SRC_CUSTOM + "/*.glb")):
     name = os.path.splitext(os.path.basename(g))[0]
+    if ONLY and name not in ONLY: continue
     jobs.append((g, f"{OUT}/{name}/{name}.usd"))
 for g in sorted(glob.glob(SRC_OBJ + "/*.glb")):
     b = os.path.basename(g)
     if any(b.startswith(c) for c in CATS):
         name = os.path.splitext(b)[0]
+        if ONLY and name not in ONLY: continue
         jobs.append((g, f"{OUT}/objects/{name}/{name}.usd"))
 print(f"[conv] {len(jobs)} jobs", flush=True)
 

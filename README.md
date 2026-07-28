@@ -92,6 +92,6 @@ setsid nohup bash go2_city_sim/teleop/run_go2.sh > /dev/null 2>&1 &
 
 ## 에셋 출처
 
-- 보행등 `ped_light_asa21`: Sketchfab CC-BY (Objaverse UID 2f720ea6… 경유 확보)
-- 건물·가구: URBAN-SIM 동봉 GLB를 USD로 변환 (`convert_assets.py`)
-- 차량 신호등·나무·가로등·볼라드: NVIDIA SimReady (공개 S3, 저장소 미포함)
+모든 에셋의 출처·원본 링크·라이선스는 **[assets/ATTRIBUTION.md](assets/ATTRIBUTION.md)** 참조.
+요약: 보행등 = "Pedestrian Traffic Light" by ASA21 (Sketchfab, CC BY 4.0) · 건물/가구/로봇 = URBAN-SIM (Apache-2.0) ·
+신호등/나무/소품 = NVIDIA Omniverse 콘텐츠(미포함, `s3_pull.py`) · 재질 = NVIDIA vMaterials
