@@ -157,11 +157,8 @@ for i, r in enumerate(GR["brick"]):
     if not sh:
         rect_slab(f"{G}/brick{i}", *r, -0.05, CURB, m_cobb, uv=0.8); continue
     # 한국식 이면도로: 연석 없는 아스팔트 노면 + 양측 가장자리 백색 실선 + 실선 바깥 녹색 보행 통행로
-    # 다른 차도와 완전히 동일: 같은 아스팔트 슬래브(z −0.30~0) + 가장자리 백색 실선만
+    # 골목(v7): 차선 도색 없는 민 아스팔트. 타일 이음새가 도드라지지 않도록 차도와 동일 UV
     rect_slab(f"{G}/shared{i}", *r, -0.30, 0.0, m_asph, uv=0.35)
-    x1, y1, x2, y2 = r
-    for _s2, _ex in ((0, x1 + 0.6), (1, x2 - 0.6)):
-        rect_slab(f"{G}/shln{i}{_s2}", _ex-0.075, y1, _ex+0.075, y2, 0.0, 0.010, m_white, uv=0)
 
 # 횡단보도 + 정지선 + 램프
 Z = "/World/Marks"
