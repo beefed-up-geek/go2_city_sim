@@ -30,8 +30,7 @@ echo "== urbansim =="
 $PY -m pip install -q --no-build-isolation -e .
 
 echo "== extras =="
-$PY -m pip install -q stable_baselines3 tensorboard scikit-image pyyaml gdown "pybind11[global]" \
-  jax chex distrax optax flax
+$PY -m pip install -q -r "$(dirname "$0")/../requirements.txt"
 # metaurban ORCA 플래너의 C++ 모듈(bind.so) 경로 등록 — 빌드 산출물은 워크스페이스에 존재
 SITE=$($PY -c "import site; print(site.getsitepackages()[0])" 2>/dev/null | tail -1)
 echo "/workspace/urban-sim/meta_source/metaurban/metaurban/orca_algo/build" > "$SITE/orca_bind.pth" \

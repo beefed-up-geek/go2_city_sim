@@ -1,0 +1,19 @@
+# go2_city_sim 추가 파이썬 의존성
+# Isaac Sim 5.0 컨테이너의 /isaac-sim/python.sh 환경에 설치한다:
+#   /isaac-sim/python.sh -m pip install -r requirements.txt
+# (isaaclab·metaurban·urbansim 자체는 editable 설치 — setup/install_urbansim.sh가 처리)
+#
+# 검증된 전체 환경의 정확한 버전 고정은 setup/requirements.lock.txt 참조.
+
+stable_baselines3
+tensorboard
+scikit-image
+pyyaml
+gdown
+pybind11[global]
+jax
+jaxlib
+chex
+distrax
+optax
+flax

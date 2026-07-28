@@ -50,6 +50,29 @@ docs/
 다른 경로는 환경변수로 조정: `URBANSIM_WS`(컨테이너 쪽), `URBANSIM_WS_HOST`,
 `GO2CITY_ROOT`, `CITY_USD`.
 
+## 설치 (처음부터)
+
+전제: NVIDIA GPU + 드라이버, docker + nvidia-container-toolkit.
+
+```bash
+# 0) 워크스페이스 = URBAN-SIM 코드 체크아웃 (이 저장소를 그 안에 클론)
+git clone https://github.com/metadriverse/urban-sim ~/urban_sim
+cd ~/urban_sim && git clone https://github.com/beefed-up-geek/go2_city_sim.git
+
+# 1) 외부 에셋 자동 수급·정리·검증 (NVIDIA S3 1.8GB + URBAN-SIM 팩 8.6GB + asa21)
+python3 go2_city_sim/setup/fetch_assets.py          # --check = 검증만
+
+# 2) Isaac Sim 5.0 컨테이너 생성 (워크스페이스를 /workspace/urban-sim으로 마운트)
+docker run -d --name urbansim --gpus all --network host   --memory 20g --memory-swap 28g -e ACCEPT_EULA=Y   -v ~/urban_sim:/workspace/urban-sim nvcr.io/nvidia/isaac-sim:5.0.0   bash -c "sleep infinity"
+
+# 3) 컨테이너 안에 파이썬 환경 구성 (requirements.txt 포함 — 10~20분)
+docker exec urbansim bash -c   'cd /workspace/urban-sim && bash go2_city_sim/setup/install_urbansim.sh'
+```
+
+- 파이썬 의존성: 루트 [`requirements.txt`](requirements.txt)
+  (전체 고정 버전은 [`setup/requirements.lock.txt`](setup/requirements.lock.txt))
+- 에셋 출처·라이선스: [`assets/ATTRIBUTION.md`](assets/ATTRIBUTION.md)
+
 ## 실행
 
 ```bash
