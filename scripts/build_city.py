@@ -480,11 +480,13 @@ protos_b = {}
 _BLD_FP = []          # 배치된 건물 footprint(여유 0.35 m 포함) — 주차구획 회피용
 for i, b in enumerate(L["buildings"]):  # 실측 native 크기 그대로
     asset = b["asset"]
-    if asset not in protos_b:
-        protos_b[asset] = make_proto(f"bld_{asset[9:17]}", f"{CUSTOM}/objects/{asset}/{asset}.usd")
+    _key = (asset, b.get("h"))            # 높이 지정이 다르면 별도 프로토
+    if _key not in protos_b:
+        _tag = f"bld_{asset[9:17]}" + (f"_h{int(b['h'])}" if b.get("h") else "")
+        protos_b[_key] = make_proto(_tag, f"{CUSTOM}/objects/{asset}/{asset}.usd", target_h=b.get("h"))
         # GLB 폭주 메시 가드(프로토 단계 → 전 인스턴스 전파): 60 m 넘는 메시는 깨진 지오메트리
         _bc9 = UsdGeom.BBoxCache(Usd.TimeCode.Default(), ["default", "render", "proxy"])
-        for _pr9 in Usd.PrimRange(stage.GetPrimAtPath(f"/World/_protos/{protos_b[asset]}")):
+        for _pr9 in Usd.PrimRange(stage.GetPrimAtPath(f"/World/_protos/{protos_b[_key]}")):
             if not _pr9.IsA(UsdGeom.Mesh): continue
             _r9 = _bc9.ComputeWorldBound(_pr9).ComputeAlignedRange()
             if _r9.IsEmpty(): continue
@@ -494,8 +496,8 @@ for i, b in enumerate(L["buildings"]):  # 실측 native 크기 그대로
                 UsdGeom.Imageable(_pr9).MakeInvisible()
                 UsdPhysics.CollisionAPI.Apply(_pr9).CreateCollisionEnabledAttr(False)
                 print(f"[guard] runaway mesh hidden in {protos_b[asset]}: {_pr9.GetName()} {_ext9:.0f}m", flush=True)
-    place(f"/World/Buildings/B{i}", protos_b[asset], b["pos"][0], b["pos"][1], CURB, yaw=b["rot"], instanceable=False)
-    _bf = PROTO_FP.get(protos_b[asset])
+    place(f"/World/Buildings/B{i}", protos_b[_key], b["pos"][0], b["pos"][1], CURB, yaw=b["rot"], instanceable=False)
+    _bf = PROTO_FP.get(protos_b[_key])
     if _bf:
         _fw, _fd = (_bf[1], _bf[0]) if b["rot"] % 180 else (_bf[0], _bf[1])
         _BLD_FP.append((b["pos"][0]-_fw/2-0.35, b["pos"][1]-_fd/2-0.35,
@@ -580,6 +582,20 @@ for f_i, f in enumerate(L["furniture"]):        # 정류장 부속 소화전(노
             UsdShade.MaterialBindingAPI.Apply(prim).Bind(m_red, bindingStrength=UsdShade.Tokens.strongerThanDescendants)
             print(f"[fix] hydrant red: {prim.GetName()}", flush=True)
 UsdGeom.Imageable(PROTOS.GetPrim()).MakeInvisible()
+# 건물이 소속 블록을 벗어나는지 검증(에셋 원본 크기 오배치 조기 발견)
+_over = 0
+for _bi8, _b8 in enumerate(L["buildings"]):
+    _fp8 = PROTO_FP.get(protos_b.get((_b8["asset"], _b8.get("h"))))
+    if not _fp8: continue
+    _w8, _d8 = (_fp8[1], _fp8[0]) if _b8["rot"] % 180 else (_fp8[0], _fp8[1])
+    _x8, _y8 = _b8["pos"]
+    _blk = next((r for r in GR["block"] if r[0] <= _x8 <= r[2] and r[1] <= _y8 <= r[3]), None)
+    if _blk and (_x8-_w8/2 < _blk[0]-1.5 or _x8+_w8/2 > _blk[2]+1.5 or
+                 _y8-_d8/2 < _blk[1]-1.5 or _y8+_d8/2 > _blk[3]+1.5):
+        _over += 1
+        print(f"[warn] B{_bi8} {_b8['asset'][9:17]} {_w8:.0f}x{_d8:.0f}m 이 블록을 벗어남 "
+              f"(블록 {_blk[2]-_blk[0]:.0f}x{_blk[3]-_blk[1]:.0f}m) — h 지정으로 축소 검토", flush=True)
+print(f"[city] 건물 블록 초과: {_over}건", flush=True)
 print("[city] buildings+furniture done", flush=True)
 
 # ---------------- 불법 주차 차량 (갓길) ----------------
