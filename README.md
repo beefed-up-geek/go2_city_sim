@@ -67,6 +67,11 @@ docker run -d --name urbansim --gpus all --network host   --memory 20g --memory-
 
 # 3) 컨테이너 안에 파이썬 환경 구성 (requirements.txt 포함 — 10~20분)
 docker exec urbansim bash -c   'cd /workspace/urban-sim && bash go2_city_sim/setup/install_urbansim.sh'
+
+# 4) 보행자 에셋 생성 (486MB라 저장소 미포함 — URBAN-SIM 팩의 gltf에서 변환)
+docker exec urbansim bash -c 'cd /workspace/urban-sim && \
+  /isaac-sim/python.sh go2_city_sim/scripts/convert_peds.py 12 && \
+  /isaac-sim/python.sh go2_city_sim/scripts/make_anim_peds.py'
 ```
 
 - 파이썬 의존성: 루트 [`requirements.txt`](requirements.txt)
@@ -84,6 +89,13 @@ docker exec urbansim bash -c \
 setsid nohup bash go2_city_sim/teleop/run_go2.sh > /dev/null 2>&1 &
 
 # 3) 브라우저에서 http://<서버>:8003
+
+# 동적 트래픽 실행 인자
+bash go2_city_sim/teleop/run_go2.sh --no-cars           # 보행자만
+bash go2_city_sim/teleop/run_go2.sh --no-peds           # 차량만
+bash go2_city_sim/teleop/run_go2.sh --no-traffic        # 정적 도시
+bash go2_city_sim/teleop/run_go2.sh --cars 6 --peds 20  # 개체 수 지정
+bash go2_city_sim/teleop/run_go2.sh --traffic-speed 0.5 # 전체 속도 배율
 ```
 
 ### 웹 엔드포인트
@@ -94,7 +106,8 @@ setsid nohup bash go2_city_sim/teleop/run_go2.sh > /dev/null 2>&1 &
 | `/status` | 위치·명령·sim fps·**현재 신호 페이즈** JSON |
 | `POST /cmd` | `(vx, vy, wz)` 속도 명령 |
 | `POST /goto` | `{x,y,z,yaw}` 텔레포트 |
-| `POST /sigcfg` | `{"blink": 초}` 보행 점멸 시간 변경 (기본 5.83 = 7m ÷ 1.2m/s) |
+| `POST /sigcfg` | `{"blink": 초}` 보행 점멸 시간 변경 (기본 9.17 = 11m ÷ 1.2m/s) |
+| `POST /traffic` | `{"cars": false, "peds": true}` 트래픽 실시간 on/off |
 | `POST /cam` | 3인칭 카메라 라이브 튜닝 |
 | `/layout` | city_layout.json 서빙 (미니맵용) |
 | `/frame/ego`, `/frame/tpv` | 단일 프레임 캡처 |
