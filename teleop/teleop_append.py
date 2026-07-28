@@ -583,6 +583,23 @@ except Exception as _te:
     print("[traffic] 초기화 실패:", _te, flush=True); _tb3.print_exc()
 _traf_t = [time.monotonic()]
 _terrain_recheck = [0]
+
+# ---------- 정지 감시 ----------
+# RTX 렌더 그래프가 CUDA 오류(misaligned address 등)로 죽으면 프로세스는 살아 있고
+# HTTP 스레드도 응답하지만 메인 루프만 멈춘다. 러너의 자동 리스폰은 프로세스 종료를
+# 조건으로 하므로 이 경우 복구되지 않는다 → 직접 감지해서 종료한다.
+_alive = [time.monotonic()]
+STALL_EXIT_S = float(_os.environ.get("TELEOP_STALL_EXIT_S", "90"))
+
+def _stall_watch():
+    while True:
+        time.sleep(10)
+        d = time.monotonic() - _alive[0]
+        if d > STALL_EXIT_S:
+            print(f"[teleop] 메인 루프 {d:.0f}초 정지 — 프로세스 종료(러너가 재기동)", flush=True)
+            _os._exit(1)
+
+_threading.Thread(target=_stall_watch, daemon=True).start()
 while simulation_app.is_running():
     t0 = time.monotonic()
     with _state_lock:
@@ -635,6 +652,7 @@ while simulation_app.is_running():
             town_signals.step(0.1)
         except Exception:
             pass
+    _alive[0] = time.monotonic()          # 정지 감시 하트비트
     pos, yaw = _update_cameras()
     env.step(action)
 

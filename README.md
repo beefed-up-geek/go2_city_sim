@@ -46,14 +46,45 @@ docs/
 | NVIDIA People(`assets/usd/people/`) — 보행자 캐릭터 10종·걷기 클립 24종·AnimationGraph | 0.7GB | NVIDIA Omniverse 공개 S3 |
 | URBAN-SIM 에셋 팩 — objects GLB·vMaterials·COCO 로봇·보행자 | 8.6GB | HuggingFace `Hollis71025/URBAN-SIM-Assets` |
 | asa21 보행등 GLB | 0.7MB | Objaverse (저장소에도 동봉) |
-| Isaac Sim 5.0 컨테이너 + URBAN-SIM 코드 체크아웃 | — | 별도: NGC 이미지, URBAN-SIM 저장소 → `setup/install_urbansim.sh` |
+| Isaac Sim 5.0 컨테이너 + URBAN-SIM 코드 체크아웃 | — | 아래 **완성 이미지** 사용 또는 `setup/install_urbansim.sh`로 직접 구성 |
 
 워크스페이스(호스트 `~/urban_sim` = 컨테이너 `/workspace/urban-sim`)에 위
 의존성이 있고, 이 저장소를 워크스페이스 아래에 클론했다고 가정한다.
 다른 경로는 환경변수로 조정: `URBANSIM_WS`(컨테이너 쪽), `URBANSIM_WS_HOST`,
 `GO2CITY_ROOT`, `CITY_USD`.
 
-## 설치 (처음부터)
+## 설치 A — 완성 컨테이너 이미지 사용 (권장)
+
+파이썬 환경 구성(10~20분, 버전 핀 다수)이 끝난 이미지를 공개해 두었다.
+
+```
+kty0820/go2-city-sim:isaac5.0-env     # = nvcr.io/nvidia/isaac-sim:5.0.0 + URBAN-SIM 파이썬 환경
+```
+
+| 항목 | 값 |
+|---|---|
+| 베이스 | `nvcr.io/nvidia/isaac-sim:5.0.0` (NVIDIA NGC, ACCEPT_EULA 필요) |
+| 추가된 것 | `setup/requirements.lock.txt` 전체 + torch 2.7.0+cu128 · numpy 1.26.4 · typing_extensions 4.15.0(Kit `pip_prebundle` 사본 포함) · jax 0.4.35 · rsl-rl / rl-games / skrl · ORCA `orca_bind.pth` |
+| 크기 | 약 49GB (내려받기 압축 기준 더 작음) |
+| **엔트리포인트** | `bash -c "sleep infinity"` — **반드시 `--entrypoint bash`로 실행**. 이미지 기본값(`runheadless.sh`)으로 띄우면 쓰지도 않는 스트리밍 Isaac Sim이 상주하며 VRAM 2.5GB와 GPU를 잡아먹는다 |
+
+```bash
+git clone https://github.com/metadriverse/urban-sim ~/urban_sim
+cd ~/urban_sim && git clone https://github.com/beefed-up-geek/go2_city_sim.git
+python3 go2_city_sim/setup/fetch_assets.py        # 외부 에셋 수급·검증
+
+docker run -d --name urbansim \
+  --gpus all --network host --memory 20g --memory-swap 28g \
+  -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
+  -v ~/urban_sim:/workspace/urban-sim \
+  -v ~/docker/isaac-sim/cache/kit:/isaac-sim/kit/cache \
+  -v ~/docker/isaac-sim/cache/ov:/root/.cache/ov \
+  -v ~/docker/isaac-sim/cache/glcache:/root/.cache/nvidia/GLCache \
+  -v ~/docker/isaac-sim/cache/computecache:/root/.nv/ComputeCache \
+  --entrypoint bash kty0820/go2-city-sim:isaac5.0-env -c "sleep infinity"
+```
+
+## 설치 B — 처음부터 구성
 
 전제: NVIDIA GPU + 드라이버, docker + nvidia-container-toolkit.
 
@@ -67,7 +98,11 @@ cd ~/urban_sim && git clone https://github.com/beefed-up-geek/go2_city_sim.git
 python3 go2_city_sim/setup/fetch_assets.py          # --check = 검증만
 
 # 2) Isaac Sim 5.0 컨테이너 생성 (워크스페이스를 /workspace/urban-sim으로 마운트)
-docker run -d --name urbansim --gpus all --network host   --memory 20g --memory-swap 28g -e ACCEPT_EULA=Y   -v ~/urban_sim:/workspace/urban-sim nvcr.io/nvidia/isaac-sim:5.0.0   bash -c "sleep infinity"
+#    --entrypoint bash 를 빼면 스트리밍 Isaac Sim이 상주하며 VRAM 2.5GB를 낭비한다
+docker run -d --name urbansim --gpus all --network host \
+  --memory 20g --memory-swap 28g -e ACCEPT_EULA=Y \
+  -v ~/urban_sim:/workspace/urban-sim \
+  --entrypoint bash nvcr.io/nvidia/isaac-sim:5.0.0 -c "sleep infinity"
 
 # 3) 컨테이너 안에 파이썬 환경 구성 (requirements.txt 포함 — 10~20분)
 docker exec urbansim bash -c   'cd /workspace/urban-sim && bash go2_city_sim/setup/install_urbansim.sh'
@@ -132,6 +167,18 @@ bash go2_city_sim/teleop/run_go2.sh --traffic-speed 0.5 # 전체 속도 배율
 - 필요한 확장(`omni.anim.graph.bundle` 등)은 **Kit 기동 인자**로 켜야 한다
   (기동 후 `enable_extension`으로 켜면 OGN 노드 등록이 실패하고 그래프 실행에서 죽는다).
   `run_go2.sh`가 `--kit_args`로 전달한다.
+
+## 요구 사양
+
+| 항목 | 실측 / 권장 |
+|---|---|
+| VRAM | **약 9.0GB 사용**(카메라 1280×720 2대 + 차량 11대 + 스킨드 보행자 17명) → 12GB 이상 권장, 16GB 여유 |
+| 시스템 RAM | 컨테이너 20GB 제한으로 운용(Isaac Sim을 두 개 띄우면 OOM) |
+| GPU | RTX 3090 기준 sim ≈ 4.7fps (헤드리스 + 렌더 2뷰) |
+
+RTX 렌더 그래프가 CUDA 오류로 죽으면 프로세스는 살아 있고 HTTP도 응답하지만 메인
+루프만 멈춘다. `teleop_append.py`의 정지 감시기가 90초 무진행 시 프로세스를 종료해
+`run_go2.sh`가 재기동한다(`TELEOP_STALL_EXIT_S`로 조정).
 
 ## 신호 시스템
 

@@ -65,6 +65,20 @@ Bench_39ee5c49…     Trash_bin_8dca3d38…  Vending_machine_72ce292e…  bussta
   제공하는 콘텐츠. 재배포 제약이 있어 **저장소에 포함하지 않는다** (각자 s3_pull.py로 수령).
   https://docs.omniverse.nvidia.com/platform/latest/common/NVIDIA_Omniverse_License_Agreement.html
 
+### 2.1b NVIDIA People (보행자) — `assets/usd/people/`
+
+| 용도 | 에셋 경로 |
+|---|---|
+| 보행자 캐릭터 10종(리깅·텍스처) | `Characters/{F_Business_02, F_Medical_01, M_Medical_01, female_adult_police_01_new, female_adult_police_02, female_adult_police_03_new, male_adult_construction_01_new, male_adult_construction_03, male_adult_construction_05_new, male_adult_police_04}/` |
+| 애니메이션 그래프(상태머신 + MotionMatching) | `Characters/Biped_Setup.usd` + `Characters/biped_demo/` |
+| 걷기·대기 모션 클립 24종 | `Animations/*.skelanim.usd` |
+
+- 출처: NVIDIA Omniverse 공개 콘텐츠 버킷, prefix `Assets/Isaac/5.0/Isaac/People/`
+  (다운로드: `setup/fetch_assets.py`의 `pull_people()`)
+- 라이선스: **NVIDIA Omniverse License Agreement** (위 2.1과 동일) — 재배포 제약이 있어
+  **저장소에 포함하지 않는다**. 변환 없이 원본 그대로 참조하며, 런타임에
+  `AnimationGraphAPI`로 그래프만 연결한다.
+
 ### 2.2 NVIDIA vMaterials (MDL 재질) — `$URBANSIM_WS/assets/materials/`
 
 - 용도: 차도(Asphalt_Fine)·보도(Paving_Stones)·벽돌길(Small_Cobblestone)·광장(Large_Granite_Paving)·흙(Mulch)
@@ -80,6 +94,10 @@ Bench_39ee5c49…     Trash_bin_8dca3d38…  Vending_machine_72ce292e…  bussta
 
 - **Isaac Sim 5.0** (docker 컨테이너): NVIDIA Omniverse/Isaac Sim 라이선스
 - **URBAN-SIM** 프레임워크(코드, play.py 등): Apache License 2.0
+- 배포 이미지 `kty0820/go2-city-sim:isaac5.0-env` 는 NGC 이미지
+  `nvcr.io/nvidia/isaac-sim:5.0.0` 위에 파이썬 의존성만 설치한 것으로,
+  베이스 이미지의 내용과 라이선스(사용 시 `ACCEPT_EULA=Y` 필요)는 NVIDIA에 귀속된다.
+  NVIDIA 에셋은 이미지에 포함되지 않는다(마운트한 워크스페이스에 각자 수령).
 
 ---
 
@@ -89,7 +107,8 @@ Bench_39ee5c49…     Trash_bin_8dca3d38…  Vending_machine_72ce292e…  bussta
 |---|---|---|---|
 | 보행등 (asa21) | Sketchfab @ASA21 → Objaverse | CC BY 4.0 | ✅ |
 | 건물 13·가구 4 | URBAN-SIM | Apache-2.0 | ✅ |
-| 나무·관목·차량신호등·가로등·볼라드·HDR | NVIDIA Omniverse 콘텐츠 | NVIDIA Omniverse License | ❌ (s3_pull.py) |
+| 나무·관목·차량신호등·가로등·볼라드·HDR | NVIDIA Omniverse 콘텐츠 | NVIDIA Omniverse License | ❌ (fetch_assets.py) |
+| 보행자 캐릭터 10종·모션 24종·AnimationGraph | NVIDIA Omniverse People | NVIDIA Omniverse License | ❌ (fetch_assets.py) |
 | 도로·보도 MDL 재질 | NVIDIA vMaterials (URBAN-SIM 동봉) | vMaterials License | ❌ |
 | COCO/Go2 로봇 | URBAN-SIM (원류: Unitree) | Apache-2.0 | ❌ |
 | 도로·연석·램프·횡단보도 지오메트리 | 본 저장소 자작 (`build_city.py`) | 저장소 라이선스 | ✅ |
