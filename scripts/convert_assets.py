@@ -12,7 +12,8 @@ BASE = os.environ.get("URBANSIM_WS", "/workspace/urban-sim")
 SRC_CUSTOM = f"{ROOT}/assets/src"                 # 저장소 동봉 GLB (asa21 등)
 SRC_OBJ = f"{BASE}/assets/objects"                # URBAN-SIM 원본 GLB 모음
 OUT = f"{ROOT}/assets/usd"
-CATS = ["Building_", "Bench_", "Trash_bin_", "TrashCan_", "busstation_", "Telephone_booth_", "Vending_machine_", "Mailbox_"]
+CATS = ["Building_", "Bench_", "Trash_bin_", "TrashCan_", "busstation_", "Telephone_booth_",
+        "Vending_machine_", "Mailbox_", "car_", "Scooter_", "Bicycle_"]
 ONLY = set(sys.argv[1:])                          # 인자 지정 시 해당 이름만 변환
 
 jobs = []

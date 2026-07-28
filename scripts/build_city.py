@@ -29,7 +29,8 @@ stage.SetDefaultPrim(world.GetPrim())
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # go2_city_sim 저장소 루트
 BASE = os.environ.get("URBANSIM_WS", "/workspace/urban-sim")          # 외부 워크스페이스(NVIDIA 에셋·출력)
 L = json.load(open(f"{ROOT}/assets/city_layout.json"))
-EXT, RW, SWI, SWO = 65.0, 3.5, 3.5, 6.5
+EXT, RW, SWI, SWO = 65.0, 5.5, 5.5, 8.5      # v6: 차도 반폭 3.5→5.5
+LANE, SHLD = 3.5, 2.0                        # 차로 / 갓길
 RCL, BLK, PER, SH = 28.0, 21.5, 34.5, 3.0
 CURB = 0.105   # v5.3: 보도 두께 1.5배 (0.07 → 0.105)
 MAT = f"{BASE}/assets/materials"
@@ -68,6 +69,7 @@ m_grass = pbr_mat("grass", (0.16, 0.27, 0.11), 1.0)
 m_white = pbr_mat("white", (0.85, 0.85, 0.82), 0.75)
 m_yellow = pbr_mat("yellow", (0.85, 0.65, 0.10), 0.8)
 m_metal = pbr_mat("metal", (0.35, 0.36, 0.38), 0.45)
+m_kgrn = pbr_mat("kr_green", (0.10, 0.42, 0.20), 0.88)   # 한국 이면도로 보행자 통행로 도색
 
 # ---------------- box mesh (UV 포함) ----------------
 def box_mesh(path, cx, cy, w, d, z0, z1, mat, yaw=0.0, pitch=0.0, uv=0.5):
@@ -98,7 +100,7 @@ def rect_slab(path, x1, y1, x2, y2, z0, z1, mat, uv=0.5):
 
 G = "/World/Ground"
 GR = L["ground"]
-GEXT = 77.0
+GEXT = 88.0
 rect_slab(G+"/grass", -GEXT, -GEXT, GEXT, GEXT, -0.30, -0.002, m_grass, uv=0.25)
 for i, r in enumerate(GR["road"]): rect_slab(f"{G}/road{i}", *r, -0.30, 0.0, m_asph, uv=0.35)
 # v5.3 커브램프(보도 절개형): 횡단보도 양끝에서 보도를 절개(본선 4.0m + 플레어 1.2m×2, 런 1.5m)
@@ -135,7 +137,24 @@ _lay("block", GR["block"], m_gran, 0.3)
 _lay("fill", GR["fill"], m_gran, 0.3)
 _lay("walk", GR["walk"], m_pave, 0.8)
 _lay("narrow", GR["narrow"], m_pave, 0.8)
-for i, r in enumerate(GR["brick"]): rect_slab(f"{G}/brick{i}", *r, -0.05, CURB, m_cobb, uv=0.8)
+_SHR = L.get("shared", [])
+def _is_shared(r):
+    for sh in _SHR:
+        if sh["axis"] == "v" and abs((r[0]+r[2])/2 - sh["c"]) < 0.6 and abs(abs(r[2]-r[0]) - 2*sh["w"]) < 0.6:
+            return sh
+    return None
+for i, r in enumerate(GR["brick"]):
+    sh = _is_shared(r)
+    if not sh:
+        rect_slab(f"{G}/brick{i}", *r, -0.05, CURB, m_cobb, uv=0.8); continue
+    # 한국식 이면도로: 연석 없는 아스팔트 노면 + 양측 가장자리 백색 실선 + 실선 바깥 녹색 보행 통행로
+    rect_slab(f"{G}/shared{i}", *r, -0.05, CURB, m_asph, uv=0.35)
+    KW, KL = 0.9, 0.12                     # 보행 도색 폭 / 실선 폭
+    x1, y1, x2, y2 = r
+    rect_slab(f"{G}/shgrn{i}a", x1, y1, x1+KW, y2, CURB, CURB+0.004, m_kgrn, uv=0)
+    rect_slab(f"{G}/shgrn{i}b", x2-KW, y1, x2, y2, CURB, CURB+0.004, m_kgrn, uv=0)
+    rect_slab(f"{G}/shln{i}a", x1+KW, y1, x1+KW+KL, y2, CURB, CURB+0.006, m_white, uv=0)
+    rect_slab(f"{G}/shln{i}b", x2-KW-KL, y1, x2-KW, y2, CURB, CURB+0.006, m_white, uv=0)
 
 # 횡단보도 + 정지선 + 램프
 Z = "/World/Marks"
@@ -212,12 +231,13 @@ for ri, rp in enumerate(L["ramps"]):  # 잔여 웨지 램프(차량 진입·공�
 ARMV = {"N": (0,1), "S": (0,-1), "E": (1,0), "W": (-1,0)}
 for ci, cw in enumerate(L["crosswalks"]):  # 정지선(접근차로 반폭)
     ix, iy = cw["inter"]; dx, dy = ARMV[cw["arm"]]
-    if dy:  # v-road arm: 접근차로는 arm N -> x<ix
+    cx0, cy0 = cw["center"]; off = cw["depth"]/2 + 0.1     # 횡단보도 바깥(접근 차로 쪽)
+    if dy:
         x1, x2 = (ix-RW+0.2, ix-0.15) if dy > 0 else (ix+0.15, ix+RW-0.2)
-        rect_slab(f"{Z}/stop{ci}", x1, iy+dy*7.0, x2, iy+dy*7.45, 0.0, 0.012, m_white, uv=0)
+        rect_slab(f"{Z}/stop{ci}", x1, cy0+dy*off, x2, cy0+dy*(off+0.45), 0.0, 0.012, m_white, uv=0)
     else:
         y1, y2 = (iy+0.15, iy+RW-0.2) if dx > 0 else (iy-RW+0.2, iy-0.15)
-        rect_slab(f"{Z}/stop{ci}", ix+dx*7.0, y1, ix+dx*7.45, y2, 0.0, 0.012, m_white, uv=0)
+        rect_slab(f"{Z}/stop{ci}", cx0+dx*off, y1, cx0+dx*(off+0.45), y2, 0.0, 0.012, m_white, uv=0)
 di = 0
 for r in L["roads"]:  # 중앙선 점선(황색), 교차로/횡단보도 회피
     lo, hi = r["lo"], r["hi"]; t = lo + 2.0
@@ -228,11 +248,46 @@ for r in L["roads"]:  # 중앙선 점선(황색), 교차로/횡단보도 회피
             else: rect_slab(f"{Z}/cl{di}", t, r["c"]-0.07, t+2.0, r["c"]+0.07, 0.0, 0.008, m_yellow, uv=0)
             di += 1
         t += 4.0
-print(f"[city] ground+marks done ({di} dashes)", flush=True)
+# 가장자리 차선(백색 실선): 차로와 갓길의 경계
+_VC = [r["c"] for r in L["roads"] if r["axis"] == "v"]
+_HC = [r["c"] for r in L["roads"] if r["axis"] == "h"]
+_SHW = [(sh["c"], sh["w"]) for sh in L.get("shared", [])]
+def _gaps_for(road):
+    g = []
+    cross = _HC if road["axis"] == "v" else _VC
+    for c2 in cross: g.append((c2 - RW - 0.4, c2 + RW + 0.4))
+    for cw in L["crosswalks"]:
+        if cw["axis"] != road["axis"]: continue
+        cx0, cy0 = cw["center"]
+        along, perp = (cy0, cx0) if road["axis"] == "v" else (cx0, cy0)
+        if abs(perp - road["c"]) > RW: continue
+        g.append((along - cw["depth"]/2 - 0.3, along + cw["depth"]/2 + 0.3))
+    if road["axis"] == "h":                      # 혼용길 진입 개구부
+        for sc, sw in _SHW: g.append((sc - sw - 0.6, sc + sw + 0.6))
+    return sorted(g)
+_ei = 0
+for r in L["roads"]:
+    for gp in _gaps_for(r):
+        pass
+    segs, t = [], r["lo"]
+    for a, b in _gaps_for(r):
+        if b <= r["lo"] or a >= r["hi"]: continue
+        if a > t: segs.append((t, min(a, r["hi"])))
+        t = max(t, b)
+    if t < r["hi"]: segs.append((t, r["hi"]))
+    for a, b in segs:
+        if b - a < 0.8: continue
+        for sd in (-1, 1):
+            e = r["c"] + sd * LANE
+            if r["axis"] == "v": rect_slab(f"{Z}/edge{_ei}", e-0.075, a, e+0.075, b, 0.0, 0.010, m_white, uv=0)
+            else:                rect_slab(f"{Z}/edge{_ei}", a, e-0.075, b, e+0.075, 0.0, 0.010, m_white, uv=0)
+            _ei += 1
+print(f"[city] ground+marks done ({di} dashes, {_ei} edge lines)", flush=True)
 
 # ---------------- 프로토타입 로더 ----------------
 PROTOS = UsdGeom.Scope.Define(stage, "/World/_protos")
-def make_proto(name, asset, target_h=None, target_wd=None):
+PROTO_FP = {}   # name -> (평면 x, 평면 y, 높이) 스케일 적용 후
+def make_proto(name, asset, target_h=None, target_wd=None, target_w_min=None):
     root = UsdGeom.Xform.Define(stage, f"/World/_protos/{name}")
     fix = UsdGeom.Xform.Define(stage, f"/World/_protos/{name}/fix")
     g = UsdGeom.Xform.Define(stage, f"/World/_protos/{name}/fix/g")
@@ -254,6 +309,8 @@ def make_proto(name, asset, target_h=None, target_wd=None):
     s = 1.0
     if target_h and h > 1e-4: s = target_h / h
     if target_wd and w > 1e-4: s = target_wd / w
+    wmin = min(size[0], size[2] if up == "Y" else size[1])
+    if target_w_min and wmin > 1e-4: s = target_w_min / wmin
     k = mpu * s
     # 피벗 보정: 회전(Y-up→Z-up) 후 기준으로 xy는 bbox 중심, z는 바닥이 원점에 오도록
     if up == "Y":
@@ -263,6 +320,7 @@ def make_proto(name, asset, target_h=None, target_wd=None):
     xf.AddTranslateOp().Set(Gf.Vec3d(-cx_*k, -cy_*k, -z0*k))
     xf.AddRotateXOp().Set(90.0 if up == "Y" else 0.0)
     xf.AddScaleOp().Set(Gf.Vec3f(k))
+    PROTO_FP[name] = (size[0]*s, (size[2] if up == "Y" else size[1])*s, h*s)
     print(f"[proto] {name} up={up} mpu={mpu:.3f} size=({size[0]:.2f},{size[1]:.2f},{size[2]:.2f}) s={s:.3f} off=({cx_*k:.2f},{cy_*k:.2f})", flush=True)
     return name
 
@@ -482,6 +540,24 @@ for f_i, f in enumerate(L["furniture"]):        # 정류장 부속 소화전(노
             print(f"[fix] hydrant red: {prim.GetName()}", flush=True)
 UsdGeom.Imageable(PROTOS.GetPrim()).MakeInvisible()
 print("[city] buildings+furniture done", flush=True)
+
+# ---------------- 불법 주차 차량 (갓길) ----------------
+VEH_W = {"car": 1.85, "scooter": 0.75, "bike": 0.62}     # 차폭 목표(갓길 2.0 m 안에 수용)
+_vproto = {}
+for _i, _p in enumerate(L.get("parked", [])):
+    _a, _k = _p["asset"], _p["kind"]
+    if _a not in _vproto:
+        _vproto[_a] = make_proto(f"veh_{_a[:12]}", f"{CUSTOM}/objects/{_a}/{_a}.usd", target_w_min=VEH_W[_k])
+    _pn = _vproto[_a]
+    _fw, _fd, _fh = PROTO_FP[_pn]
+    _yaw = _p["yaw"] + (90.0 if _fd > _fw else 0.0)      # 모델 장축을 도로 방향으로
+    _x, _y = _p["pos"]
+    place(f"/World/Parked/v{_i}", _pn, _x, _y, 0.0, yaw=_yaw, instanceable=False)
+    _ln, _wd = max(_fw, _fd), min(_fw, _fd)              # 상세 메시 대신 박스 충돌체(비가시)
+    _cw, _cd = (_ln, _wd) if _p["yaw"] % 180 == 0 else (_wd, _ln)
+    _cb = box_mesh(f"/World/Parked/c{_i}", _x, _y, _cw, _cd, 0.02, max(0.5, _fh*0.92), m_metal, uv=0)
+    UsdGeom.Imageable(_cb.GetPrim()).MakeInvisible()
+print(f"[city] parked {len(L.get('parked', []))} vehicles ({len(_vproto)} models)", flush=True)
 
 # ---------------- 조명 ----------------
 dome = UsdLux.DomeLight.Define(stage, "/World/QualitySky")

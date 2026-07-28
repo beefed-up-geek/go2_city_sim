@@ -189,7 +189,7 @@ except Exception as _e:
     print("[teleop] minimap layout failed:", _e, flush=True)
 
 # ---------- signal logic (42s+blink 사이클, 전 교차로 동기) ----------
-SIGCFG = {"blink": round(7.0 / 1.2, 2)}   # 보행 점멸(s) = 횡단보도 길이 7m / COCO 1.2m/s. POST /sigcfg {"blink": x}
+SIGCFG = {"blink": round(11.0 / 1.2, 2)}   # 보행 점멸(s) = 횡단보도 길이 11m / COCO 1.2m/s. POST /sigcfg {"blink": x}
 try:
     from pxr import UsdGeom as _UGS
     _sig_stage = omni.usd.get_context().get_stage()
