@@ -35,12 +35,15 @@ docs/
 
 ## 외부 의존성 (저장소 미포함)
 
-| 의존성 | 크기 | 획득 방법 |
+외부 에셋은 **`python3 setup/fetch_assets.py`** 한 번으로 수급·정리·검증된다
+(없는 것만 내려받음, `--check`는 검증만). 세부:
+
+| 의존성 | 크기 | 출처 (fetch_assets.py가 자동 처리) |
 |---|---|---|
-| Isaac Sim 5.0 컨테이너(`urbansim`) | — | `setup/install_urbansim.sh` 참고 |
-| URBAN-SIM 체크아웃 + COCO/Go2 로봇 | 14GB | URBAN-SIM 공식 저장소 |
-| NVIDIA SimReady 에셋(`assets_nvidia/`) | 1.8GB | `scripts/s3_pull.py` (공개 S3) |
-| vMaterials (`assets/materials/`) | — | URBAN-SIM 동봉 |
+| NVIDIA 에셋(`assets_nvidia/`) — 나무·관목·신호등·소품·HDR | 1.8GB | NVIDIA Omniverse 공개 S3 |
+| URBAN-SIM 에셋 팩 — objects GLB·vMaterials·COCO 로봇·보행자 | 8.6GB | HuggingFace `Hollis71025/URBAN-SIM-Assets` |
+| asa21 보행등 GLB | 0.7MB | Objaverse (저장소에도 동봉) |
+| Isaac Sim 5.0 컨테이너 + URBAN-SIM 코드 체크아웃 | — | 별도: NGC 이미지, URBAN-SIM 저장소 → `setup/install_urbansim.sh` |
 
 워크스페이스(호스트 `~/urban_sim` = 컨테이너 `/workspace/urban-sim`)에 위
 의존성이 있고, 이 저장소를 워크스페이스 아래에 클론했다고 가정한다.
