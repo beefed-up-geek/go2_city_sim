@@ -142,7 +142,7 @@ def _lay(nm, rects, mat, uv):
     for i, r in enumerate(rs):
         if r[2]-r[0] > 0.02 and r[3]-r[1] > 0.02:
             rect_slab(f"{G}/{nm}{i}", *r, -0.05, CURB, mat, uv=uv)
-_lay("block", GR["block"], m_gran, 0.3)
+_lay("block", GR["block"], m_asph, 0.35)   # v7.1: 블록 내부 = 차도와 같은 아스팔트(노상 주차장)
 _lay("fill", GR["fill"], m_gran, 0.3)
 _lay("walk", GR["walk"], m_pave, 0.8)
 _lay("narrow", GR["narrow"], m_pave, 0.8)
@@ -157,8 +157,17 @@ for i, r in enumerate(GR["brick"]):
     if not sh:
         rect_slab(f"{G}/brick{i}", *r, -0.05, CURB, m_cobb, uv=0.8); continue
     # 한국식 이면도로: 연석 없는 아스팔트 노면 + 양측 가장자리 백색 실선 + 실선 바깥 녹색 보행 통행로
-    # 골목(v7): 차선 도색 없는 민 아스팔트. 타일 이음새가 도드라지지 않도록 차도와 동일 UV
+    # 골목(v7.2): 노면·표시 모두 일반 차도와 동일 — 아스팔트 + 황색 중앙선 + 백색 가장자리선
     rect_slab(f"{G}/shared{i}", *r, -0.30, 0.0, m_asph, uv=0.35)
+    _sx1, _sy1, _sx2, _sy2 = r
+    _scx = (_sx1 + _sx2) / 2
+    for _ei2, _se in enumerate((_sx1 + 0.6, _sx2 - 0.6)):       # 가장자리 백색 실선
+        rect_slab(f"{G}/shedge{i}_{_ei2}", _se-0.075, _sy1, _se+0.075, _sy2, 0.0, 0.010, m_white, uv=0)
+    _t2 = _sy1 + 1.0                                           # 황색 중앙선(점선)
+    _k2 = 0
+    while _t2 < _sy2 - 2.0:
+        rect_slab(f"{G}/shcl{i}_{_k2}", _scx-0.07, _t2, _scx+0.07, _t2+2.0, 0.0, 0.008, m_yellow, uv=0)
+        _t2 += 4.0; _k2 += 1
 
 # 횡단보도 + 정지선 + 램프
 Z = "/World/Marks"
@@ -468,11 +477,17 @@ print("[city] signals done", flush=True)
 
 # ---------------- 건물·가구 ----------------
 protos_b = {}
+_BLD_FP = []          # 배치된 건물 footprint(여유 0.35 m 포함) — 주차구획 회피용
 for i, b in enumerate(L["buildings"]):  # 실측 native 크기 그대로
     asset = b["asset"]
     if asset not in protos_b:
         protos_b[asset] = make_proto(f"bld_{asset[9:17]}", f"{CUSTOM}/objects/{asset}/{asset}.usd")
     place(f"/World/Buildings/B{i}", protos_b[asset], b["pos"][0], b["pos"][1], CURB, yaw=b["rot"], instanceable=False)
+    _bf = PROTO_FP.get(protos_b[asset])
+    if _bf:
+        _fw, _fd = (_bf[1], _bf[0]) if b["rot"] % 180 else (_bf[0], _bf[1])
+        _BLD_FP.append((b["pos"][0]-_fw/2-0.35, b["pos"][1]-_fd/2-0.35,
+                        b["pos"][0]+_fw/2+0.35, b["pos"][1]+_fd/2+0.35))
 FUR = dict(bench=("Bench_", 0.9), trash_bin=("Trash_bin_", 1.0), bus_stop=("busstation_", 2.7),
            phone_booth=("Telephone_booth_", 2.4), vending=("Vending_machine_", 1.8))   # mailbox 제거(v5.4)
 FUR_PICK = {  # 저장소에는 실제 사용 폴더만 포함 — 과거 해시 선택 결과를 고정해 재현성 보장
@@ -572,6 +587,46 @@ for _i, _p in enumerate(L.get("parked", [])):
     _cb = box_mesh(f"/World/Parked/c{_i}", _x, _y, _cw, _cd, 0.02, max(0.5, _fh*0.92), m_metal, uv=0)
     UsdGeom.Imageable(_cb.GetPrim()).MakeInvisible()
 print(f"[city] parked {len(L.get('parked', []))} vehicles ({len(_vproto)} models)", flush=True)
+
+# ---------------- 블록 내부 노상 주차장 구획선 ----------------
+STALL_W, STALL_D, SLW = 2.5, 5.0, 0.11        # 구획 폭 / 깊이 / 선 두께
+_sn = 0
+def _stall_row(x1, x2, y_edge, sgn, tag):
+    """y_edge에서 sgn 방향으로 깊이 STALL_D인 주차열 (구획선은 x 간격)"""
+    global _sn
+    n = int((x2 - x1) // STALL_W)
+    if n < 2: return
+    ox = x1 + ((x2 - x1) - n * STALL_W) / 2
+    for k in range(n + 1):
+        px = ox + k * STALL_W
+        rect_slab(f"{Z}/pl{tag}_{_sn}", px-SLW/2, min(y_edge, y_edge+sgn*STALL_D),
+                  px+SLW/2, max(y_edge, y_edge+sgn*STALL_D), CURB, CURB+0.010, m_white, uv=0); _sn += 1
+    ye = y_edge + sgn*STALL_D
+    rect_slab(f"{Z}/pl{tag}_{_sn}", ox, ye-SLW/2, ox+n*STALL_W, ye+SLW/2, CURB, CURB+0.010, m_white, uv=0); _sn += 1
+def _stall_col(y1, y2, x_edge, sgn, tag):
+    global _sn
+    n = int((y2 - y1) // STALL_W)
+    if n < 2: return
+    oy = y1 + ((y2 - y1) - n * STALL_W) / 2
+    for k in range(n + 1):
+        py = oy + k * STALL_W
+        rect_slab(f"{Z}/pl{tag}_{_sn}", min(x_edge, x_edge+sgn*STALL_D), py-SLW/2,
+                  max(x_edge, x_edge+sgn*STALL_D), py+SLW/2, CURB, CURB+0.010, m_white, uv=0); _sn += 1
+    xe = x_edge + sgn*STALL_D
+    rect_slab(f"{Z}/pl{tag}_{_sn}", xe-SLW/2, oy, xe+SLW/2, oy+n*STALL_W, CURB, CURB+0.010, m_white, uv=0); _sn += 1
+_free = [tuple(r) for r in GR["block"]]
+for _b in _BLD_FP: _free = _sub_rect(_free, _b)
+for _c in _CUTS: _free = _sub_rect(_free, _c)
+for _fi, (fx1, fy1, fx2, fy2) in enumerate(_free):
+    fw, fd = fx2-fx1, fy2-fy1
+    if fw < STALL_W*2 or fd < STALL_W*2: continue
+    if fw >= fd:                                   # 가로로 긴 영역 → 위·아래 가장자리에 주차열
+        if fd >= STALL_D + 0.3: _stall_row(fx1+0.3, fx2-0.3, fy1+0.15, +1, _fi)
+        if fd >= STALL_D*2 + 1.0: _stall_row(fx1+0.3, fx2-0.3, fy2-0.15, -1, _fi)
+    else:
+        if fw >= STALL_D + 0.3: _stall_col(fy1+0.3, fy2-0.3, fx1+0.15, +1, _fi)
+        if fw >= STALL_D*2 + 1.0: _stall_col(fy1+0.3, fy2-0.3, fx2-0.15, -1, _fi)
+print(f"[city] block parking lots: {len(_free)} areas, {_sn} lines", flush=True)
 
 # ---------------- 조명 ----------------
 dome = UsdLux.DomeLight.Define(stage, "/World/QualitySky")

@@ -21,7 +21,7 @@ docker exec urbansim bash -c 'for p in $(pgrep -f "python.*(go2_we[b]|random_en[
 sleep 3
 for r in 1 2 3 4 5 6; do
   echo "go2_web launch #$r $(date)" >> "$WS/pipeline_state.log"
-  docker exec -e GO2CITY_ROOT="$REPO_CT" urbansim bash -c "cd /workspace/urban-sim && /isaac-sim/python.sh urbansim/learning/RL/go2_web.py --env configs/env_configs/navigation/go2_web.yaml --headless --enable_cameras --num_envs 1" > "$WS/go2_web.log" 2>&1
+  docker exec -e GO2CITY_ROOT="$REPO_CT" -e PYTHONPATH="/workspace/urban-sim/meta_source/metaurban/metaurban/orca_algo/build" urbansim bash -c "cd /workspace/urban-sim && /isaac-sim/python.sh urbansim/learning/RL/go2_web.py --env configs/env_configs/navigation/go2_web.yaml --headless --enable_cameras --num_envs 1" > "$WS/go2_web.log" 2>&1
   echo "EXIT:$? at $(date)" >> "$WS/go2_web.log"
   echo "GO2_EXITED #$r $(date)" >> "$WS/pipeline_state.log"
   sleep 8
