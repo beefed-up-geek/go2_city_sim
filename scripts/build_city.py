@@ -402,11 +402,10 @@ for i, b in enumerate(L["buildings"]):  # 실측 native 크기 그대로
         protos_b[asset] = make_proto(f"bld_{asset[9:17]}", f"{CUSTOM}/objects/{asset}/{asset}.usd")
     place(f"/World/Buildings/B{i}", protos_b[asset], b["pos"][0], b["pos"][1], CURB, yaw=b["rot"], instanceable=False)
 FUR = dict(bench=("Bench_", 0.9), trash_bin=("Trash_bin_", 1.0), bus_stop=("busstation_", 2.7),
-           phone_booth=("Telephone_booth_", 2.4), vending=("Vending_machine_", 1.8), mailbox=("Mailbox_", 1.15))
+           phone_booth=("Telephone_booth_", 2.4), vending=("Vending_machine_", 1.8))   # mailbox 제거(v5.4)
 FUR_PICK = {  # 저장소에는 실제 사용 폴더만 포함 — 과거 해시 선택 결과를 고정해 재현성 보장
     "Bench_": "Bench_39ee5c499030472ca7460f3b03077135",
     "busstation_": "busstation_5acd6128d0b64ea2802bb7ae9aaa6c3d",
-    "Mailbox_": "Mailbox_a3b4bc95daf243f1a95b37d4d5880856",
     "Trash_bin_": "Trash_bin_8dca3d38daf44ef9b3866efdce2eb8bb",
     "Vending_machine_": "Vending_machine_72ce292e1bd945aea580d223c75a870e",
 }
