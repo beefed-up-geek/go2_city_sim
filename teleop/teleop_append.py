@@ -257,7 +257,8 @@ except Exception as _e:
     print("[teleop] minimap layout failed:", _e, flush=True)
 
 # ---------- signal logic (42s+blink 사이클, 전 교차로 동기) ----------
-SIGCFG = {"blink": round(11.0 / 1.2, 2)}   # 보행 점멸(s) = 횡단보도 길이 11m / COCO 1.2m/s. POST /sigcfg {"blink": x}
+SIGCFG = {"blink": round(11.0 / 1.2, 2)}
+_SIG_NOW = [("red", "red", "red")]   # 보행 점멸(s) = 횡단보도 길이 11m / COCO 1.2m/s. POST /sigcfg {"blink": x}
 try:
     from pxr import UsdGeom as _UGS
     _sig_stage = omni.usd.get_context().get_stage()
@@ -305,9 +306,13 @@ def _sig_step():
         ph, ns, ew, pd = "보행 점멸", "red", "red", ("cnt" if _on else "off")
     else:         ph, ns, ew, pd = "전적색", "red", "red", "red"
     _sigkey = (ns, ew, pd)
+    _SIG_NOW[0] = _sigkey          # 트래픽 엔진이 구독
     _rem = (36 + _bl - _t) if 28 <= _t < 36 + _bl else (_cyc - _t if _t >= 36 + _bl else None)
     with _state_lock:
         _status["signal"] = ph + (f" {max(0.0, (36 + _bl - _t)):.0f}s" if 28 <= _t < 36 + _bl else "")
+        if _TRAF[0] is not None:
+            try: _status["traffic"] = _TRAF[0].stats()
+            except Exception: pass
     if _sig_last[0] == _sigkey:
         return
     _sig_last[0] = _sigkey
@@ -496,6 +501,14 @@ class _Handler(BaseHTTPRequestHandler):
                                 float(d.get("yaw", 0.0)))
             except Exception:
                 pass
+        elif self.path == "/traffic":
+            try:
+                d = _json.loads(raw)
+                if _TRAF[0] is not None:
+                    _TRAF[0].set_enabled(cars=d.get("cars"), peds=d.get("peds"))
+                    print("[traffic] enabled:", _TRAF[0].enabled, flush=True)
+            except Exception as e:
+                print("[traffic] /traffic 오류:", e, flush=True)
         elif self.path == "/sigcfg":
             try:
                 d = _json.loads(raw)
@@ -549,6 +562,26 @@ def _hide_env_terrain(tag=""):
         print("[city] terrain hide 실패:", _e8, flush=True)
 
 _hide_env_terrain(" (init)")
+
+# ---------- 동적 트래픽 (차량·보행자) ----------
+_TRAF = [None]
+try:
+    import sys as _sys3
+    _sys3.path.insert(0, f"{_REPO}/teleop")
+    from traffic import Traffic as _Traffic
+    _tc = os.environ.get("TRAFFIC_CARS", "1") not in ("0", "false", "off")
+    _tp = os.environ.get("TRAFFIC_PEDS", "1") not in ("0", "false", "off")
+    _tn_c = int(os.environ["TRAFFIC_N_CARS"]) if os.environ.get("TRAFFIC_N_CARS") else None
+    _tn_p = int(os.environ["TRAFFIC_N_PEDS"]) if os.environ.get("TRAFFIC_N_PEDS") else None
+    _tsp = float(os.environ.get("TRAFFIC_SPEED", "1.0"))
+    with open(_LAYOUT_JSON) as _lf3:
+        _tlayout = _json.load(_lf3)
+    _TRAF[0] = _Traffic(omni.usd.get_context().get_stage(), _tlayout, _REPO,
+                        cars=_tc, peds=_tp, n_cars=_tn_c, n_peds=_tn_p, speed_scale=_tsp)
+except Exception as _te:
+    import traceback as _tb3
+    print("[traffic] 초기화 실패:", _te, flush=True); _tb3.print_exc()
+_traf_t = [time.monotonic()]
 _terrain_recheck = [0]
 while simulation_app.is_running():
     t0 = time.monotonic()
@@ -589,6 +622,14 @@ while simulation_app.is_running():
             _hide_env_terrain(f" (step {_terrain_recheck[0]})")
     except Exception as _se:
         pass
+    if _TRAF[0] is not None:
+        try:
+            _now3 = time.monotonic()
+            _dt3 = _now3 - _traf_t[0]; _traf_t[0] = _now3
+            _rp3 = robot.data.root_pos_w[0].detach().cpu().numpy()
+            _TRAF[0].step(_dt3, _SIG_NOW[0], (float(_rp3[0]), float(_rp3[1])))
+        except Exception as _tse:
+            if step_i % 200 == 0: print("[traffic] step 오류:", _tse, flush=True)
     if "town_signals" in globals():
         try:
             town_signals.step(0.1)

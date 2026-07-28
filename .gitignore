@@ -5,3 +5,8 @@ city_static.usd
 shots/
 !docs/shots/
 .DS_Store
+
+# 보행자 에셋은 용량이 커서 저장소에 넣지 않음 (486MB)
+# URBAN-SIM 팩의 gltf에서 재현: scripts/convert_peds.py → scripts/make_anim_peds.py
+assets/usd/peds/
+assets/usd/motions/
