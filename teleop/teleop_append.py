@@ -84,18 +84,48 @@ try:
         _UG2.Imageable(_gp).MakeInvisible()
     # 숨긴 환경 패치(구역 경계벽 포함)의 충돌 완전 비활성화 — 투명벽 방지
     from pxr import Usd as _Usd4, UsdPhysics as _UPh
-    _ndis = 0
-    for _root_nm in ["Walkable_000", "Walkable_001", "Walkable_002", "Walkable_003",
-                     "NonWalkable_000", "NonWalkable_001", "NonWalkable_002", "NonWalkable_003",
-                     "Obstacle_terrain"]:
-        _rp = _t_stage.GetPrimAtPath(f"/World/{_root_nm}")
-        if not (_rp and _rp.IsValid()):
+    _ndis = 0; _swept = []
+    print("[city] /World children:", [c.GetName() for c in _t_stage.GetPrimAtPath("/World").GetChildren()], flush=True)
+    for _ch in _t_stage.GetPrimAtPath("/World").GetChildren():
+        _nm4 = _ch.GetName()
+        if _nm4 == "City" or _nm4.startswith(("env", "Env", "Robot", "robot", "coco", "Light", "Sky", "Dome", "Distant")):
             continue
-        for _pr4 in _Usd4.PrimRange(_rp):
+        if _nm4.lower().startswith(("env", "light", "sky", "dome", "distant", "camera", "cam",
+                                    "tpv", "ego", "physicsscene", "looks", "render", "omni")):
+            continue                      # 로봇·조명·카메라·물리씬은 보존
+        if _ch.IsInstanceable():          # 인스턴스 프록시는 PrimRange가 건너뛰므로 해제 후 순회
+            _ch.SetInstanceable(False)
+        for _pr4 in _Usd4.PrimRange(_ch):
             if _pr4.HasAPI(_UPh.CollisionAPI):
-                _UPh.CollisionAPI(_pr4).CreateCollisionEnabledAttr(False)
-                _ndis += 1
-    print(f"[city] city_static referenced + env patch hidden + colliders off: {_ndis}", flush=True)
+                _UPh.CollisionAPI(_pr4).CreateCollisionEnabledAttr(False); _ndis += 1
+            elif _pr4.IsA(_UG2.Mesh) or _pr4.IsA(_UG2.Gprim):
+                _UPh.CollisionAPI.Apply(_pr4).CreateCollisionEnabledAttr(False); _ndis += 1
+        _UG2.Imageable(_ch).MakeInvisible()
+        _swept.append(_nm4)
+    # env 안(로봇 제외)에 원점 부근으로 남은 잔여 지오메트리 제거 — 혼용길 한복판 장애물 방지
+    _bc5 = _UG2.BBoxCache(_Usd4.TimeCode.Default(), ["default", "render", "proxy"])
+    _envp = _t_stage.GetPrimAtPath("/World/envs")
+    _origin_hits = []
+    if _envp and _envp.IsValid():
+        for _pr5 in _Usd4.PrimRange(_envp):
+            _ps5 = _pr5.GetPath().pathString
+            if "obot" in _ps5 or "oco" in _ps5:      # Robot / coco 계열 보존
+                continue
+            if not _pr5.IsA(_UG2.Boundable):
+                continue
+            _r5 = _bc5.ComputeWorldBound(_pr5).ComputeAlignedRange()
+            if _r5.IsEmpty():
+                continue
+            _m0, _m1 = _r5.GetMin(), _r5.GetMax()
+            if _m0[0] < 3 and _m1[0] > -3 and _m0[1] < 3 and _m1[1] > -3 and _m1[2] > 0.05 and _m0[2] < 3:
+                _origin_hits.append((_ps5, round(_m0[2], 2), round(_m1[2], 2)))
+                if _pr5.HasAPI(_UPh.CollisionAPI):
+                    _UPh.CollisionAPI(_pr5).CreateCollisionEnabledAttr(False)
+                else:
+                    _UPh.CollisionAPI.Apply(_pr5).CreateCollisionEnabledAttr(False)
+                _UG2.Imageable(_pr5).MakeInvisible()
+    print(f"[city] city_static referenced + env patch hidden + colliders off: {_ndis} | swept={_swept}", flush=True)
+    print(f"[city] origin obstacles removed: {_origin_hits}", flush=True)
 except Exception as e:
     print("[city] failed:", e, flush=True)
 

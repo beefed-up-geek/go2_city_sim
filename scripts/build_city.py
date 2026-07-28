@@ -115,6 +115,15 @@ for _cw in L["crosswalks"]:
         else:
             _e = _ccy + _sgn*RW
             _CUTS.append((_ccx-_hw, min(_e, _e+_sgn*RAMP_L), _ccx+_hw, max(_e, _e+_sgn*RAMP_L)))
+SH_BAND = 3.0                     # 혼용길 끝단 연석 절개 폭(코스 진출입부)
+for _sh in L.get("shared", []):
+    if _sh["axis"] != "v": continue
+    for _ey in (_sh["lo"] + 2.0, _sh["hi"] - 2.0):
+        _cy2 = _sh["hi"] - SH_BAND/2 if _ey > 0 else _sh["lo"] + SH_BAND/2
+        for _sx in (-1, 1):
+            _e2 = _sx * _sh["w"]
+            _CUTS.append((min(_e2, _e2 + _sx*RAMP_L), _cy2 - SH_BAND/2,
+                          max(_e2, _e2 + _sx*RAMP_L), _cy2 + SH_BAND/2))
 def _sub_rect(rects, cut):
     out = []
     cx1, cy1, cx2, cy2 = cut
@@ -148,13 +157,11 @@ for i, r in enumerate(GR["brick"]):
     if not sh:
         rect_slab(f"{G}/brick{i}", *r, -0.05, CURB, m_cobb, uv=0.8); continue
     # 한국식 이면도로: 연석 없는 아스팔트 노면 + 양측 가장자리 백색 실선 + 실선 바깥 녹색 보행 통행로
-    rect_slab(f"{G}/shared{i}", *r, -0.05, CURB, m_asph, uv=0.35)
-    KW, KL = 0.9, 0.12                     # 보행 도색 폭 / 실선 폭
+    # 다른 차도와 완전히 동일: 같은 아스팔트 슬래브(z −0.30~0) + 가장자리 백색 실선만
+    rect_slab(f"{G}/shared{i}", *r, -0.30, 0.0, m_asph, uv=0.35)
     x1, y1, x2, y2 = r
-    rect_slab(f"{G}/shgrn{i}a", x1, y1, x1+KW, y2, CURB, CURB+0.004, m_kgrn, uv=0)
-    rect_slab(f"{G}/shgrn{i}b", x2-KW, y1, x2, y2, CURB, CURB+0.004, m_kgrn, uv=0)
-    rect_slab(f"{G}/shln{i}a", x1+KW, y1, x1+KW+KL, y2, CURB, CURB+0.006, m_white, uv=0)
-    rect_slab(f"{G}/shln{i}b", x2-KW-KL, y1, x2-KW, y2, CURB, CURB+0.006, m_white, uv=0)
+    for _s2, _ex in ((0, x1 + 0.6), (1, x2 - 0.6)):
+        rect_slab(f"{G}/shln{i}{_s2}", _ex-0.075, y1, _ex+0.075, y2, 0.0, 0.010, m_white, uv=0)
 
 # 횡단보도 + 정지선 + 램프
 Z = "/World/Marks"
@@ -220,7 +227,7 @@ for ci, cw in enumerate(L["crosswalks"]):
             tri_prism(f"{Z}/cutf{ci}_{si}_{fi}b", (B, D, C), m_pave)
 
 for ri, rp in enumerate(L["ramps"]):  # 잔여 웨지 램프(차량 진입·공사 우회) — crosswalk형은 v5.3 절개형으로 대체
-    if rp.get("why") == "crosswalk":
+    if rp.get("why") in ("crosswalk", "lane_car"):
         continue
     x, y = rp["pos"]; dx_, dy_ = rp["down"]
     ls = abs(dx_)*rp["w"] + abs(dy_)*rp["d"]
@@ -228,6 +235,16 @@ for ri, rp in enumerate(L["ramps"]):  # 잔여 웨지 램프(차량 진입·공�
     yaw_ = math.degrees(math.atan2(dy_, dx_))
     pitch_ = math.degrees(math.atan((CURB + 0.002)/ls))
     box_mesh(f"{Z}/ramp{ri}", x, y, ls, wa, -0.20, 0.006 + (CURB - 0.004)/2, m_pave, yaw=yaw_, pitch=pitch_, uv=0.8)
+_ZS = 0.004
+_SLPS = (CURB - _ZS) / RAMP_L
+for _si, _sh in enumerate(L.get("shared", [])):
+    if _sh["axis"] != "v": continue
+    for _pi, _cy2 in enumerate((_sh["hi"] - SH_BAND/2, _sh["lo"] + SH_BAND/2)):
+        for _sx in (-1, 1):
+            _e2 = _sx * _sh["w"]; _L1 = RAMP_L + 0.03
+            box_mesh(f"{Z}/shcut{_si}_{_pi}_{'p' if _sx>0 else 'm'}",
+                     _e2 + _sx*_L1/2, _cy2, _L1, SH_BAND, -0.20, _ZS + _SLPS*_L1/2, m_pave,
+                     yaw=0.0 if _sx < 0 else 180.0, pitch=math.degrees(math.atan(_SLPS)), uv=0.8)
 ARMV = {"N": (0,1), "S": (0,-1), "E": (1,0), "W": (-1,0)}
 for ci, cw in enumerate(L["crosswalks"]):  # 정지선(접근차로 반폭)
     ix, iy = cw["inter"]; dx, dy = ARMV[cw["arm"]]
@@ -285,7 +302,7 @@ for r in L["roads"]:
 print(f"[city] ground+marks done ({di} dashes, {_ei} edge lines)", flush=True)
 
 # ---------------- 프로토타입 로더 ----------------
-PROTOS = UsdGeom.Scope.Define(stage, "/World/_protos")
+PROTOS = UsdGeom.Xform.Define(stage, "/World/_protos")   # Scope는 트랜스폼 불가 → 원본을 치우려면 Xform
 PROTO_FP = {}   # name -> (평면 x, 평면 y, 높이) 스케일 적용 후
 def make_proto(name, asset, target_h=None, target_wd=None, target_w_min=None):
     root = UsdGeom.Xform.Define(stage, f"/World/_protos/{name}")
@@ -567,6 +584,14 @@ if os.path.exists(_sky): dome.CreateTextureFileAttr(_sky)
 sun = UsdLux.DistantLight.Define(stage, "/World/QualitySun")
 sun.CreateIntensityAttr(3500.0); sun.CreateColorAttr(Gf.Vec3f(1.0, 0.98, 0.92)); sun.CreateAngleAttr(0.53)
 sx_ = UsdGeom.Xformable(sun.GetPrim()); sx_.ClearXformOpOrder(); sx_.AddRotateXYZOp().Set(Gf.Vec3d(-58.0, 25.0, 0.0))
+
+# 프로토타입 원본 더미가 원점(0,0)에 쌓여 충돌·렌더되는 것을 차단.
+# 컨테이너(/World/_protos)의 트랜스폼·가시성은 참조 대상(자식 프림)에 합성되지 않으므로
+# 인스턴스에는 영향이 없다 — 원본만 지하로 치우고 숨긴다.
+_pc = stage.GetPrimAtPath("/World/_protos")
+UsdGeom.Xformable(_pc).AddTranslateOp().Set(Gf.Vec3d(0, 0, -500.0))
+UsdGeom.Imageable(_pc).MakeInvisible()
+print("[city] proto container parked at z=-500 (hidden)", flush=True)
 
 ctx.save_as_stage(f"{BASE}/city_static.usd")
 print("[city] saved city_static.usd", flush=True)
