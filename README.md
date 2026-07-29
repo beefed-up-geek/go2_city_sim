@@ -174,10 +174,38 @@ bash go2_city_sim/teleop/run_go2.sh --traffic-speed 0.5 # 전체 속도 배율
 |---|---|
 | VRAM | **약 9.0GB 사용**(카메라 1280×720 2대 + 차량 11대 + 스킨드 보행자 17명) → 12GB 이상 권장, 16GB 여유 |
 | 시스템 RAM | 컨테이너 20GB 제한으로 운용(Isaac Sim을 두 개 띄우면 OOM) |
-| GPU | RTX 3090 기준 sim ≈ 4.7fps (헤드리스 + 렌더 2뷰) |
+| GPU | RTX 3090 기준 sim ≈ 5.7fps (헤드리스 + 렌더 2뷰, Isaac Sim 5.1) |
+| Isaac Sim | 5.0 / 5.1 모두 동작. **5.1이 약 16% 빠름**(드라이버 580 계열 요구) |
 
-RTX 렌더 그래프가 CUDA 오류로 죽으면 프로세스는 살아 있고 HTTP도 응답하지만 메인
-루프만 멈춘다. `teleop_append.py`의 정지 감시기가 90초 무진행 시 프로세스를 종료해
+### Fabric(USDRT)은 반드시 꺼야 한다
+
+IsaacLab은 트랜스폼 동기화 가속을 위해 Fabric을 기본 활성하는데, **보행자(UsdSkel
+스킨드 메시)가 씬에 있는 상태에서 로봇이 이동하면 수십 초 안에 GPU 불법 메모리
+접근으로 렌더가 죽는다.**
+
+```
+CUDA error 700: cudaErrorIllegalAddress   /  716: cudaErrorMisalignedAddress
+Failed to wait on external semaphore in CUDA
+→ "Render graph command list" 에서 실패
+dmesg: NVRM Xid 31 MMU Fault ENGINE GRAPHICS ... FAULT_PDE
+```
+
+대조 실험 결과:
+
+| Fabric | 결과 |
+|---|---|
+| ON | 3 m 주행 · 46초 만에 크래시 (10회 이상 재현) |
+| **OFF** | **440 m 주행 · 9분 완주, fps 5.2 → 5.7 상승** |
+
+`run_go2.sh`가 `TELEOP_FABRIC=0`을 기본으로 넘긴다(`=1`로 되돌릴 수 있음).
+num_envs=1 텔레옵에서는 Fabric 이득이 없어 성능 손해도 없다.
+
+원인 후보로 확인했다가 **기각된 것들**: Isaac Sim 버전(5.0/5.1 모두 동일), 애니메이션
+그래프 호출 빈도, 텍스처 스트리밍, 카메라 개수, VRAM 고갈(9.3GB로 평탄), DLSS,
+보행자와의 근접성.
+
+크래시가 나도 프로세스와 HTTP는 살아 있고 메인 루프만 멈추므로,
+`teleop_append.py`의 정지 감시기가 90초 무진행 시 프로세스를 종료해
 `run_go2.sh`가 재기동한다(`TELEOP_STALL_EXIT_S`로 조정).
 
 ## 신호 시스템

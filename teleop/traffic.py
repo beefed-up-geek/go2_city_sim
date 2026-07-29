@@ -99,6 +99,14 @@ PED_WP_REACH = 1.5     # 경유점 통과 판정
 PED_STOP_DIST = 2.0    # 신호 정지선 앞 이 거리에서 정지
 PED_SEP = 1.2          # 같은 통행선 앞사람과 최소 간격
 PED_STALL_S = 20.0     # 신호와 무관하게 이만큼 멈춰 있으면 경로 재발급
+# --- 애니메이션 그래프 통신 억제 ---
+# set_variable/PathPoints 는 GPU와 주고받는 호출이라, 정지 판정이 임계값 근처에서
+# 프레임마다 뒤집히면 통신 폭주가 일어난다(로봇이 보행자 옆을 지날 때 특히).
+# 실제로 이 상태에서 GPU→CPU 소량 복사가 무더기로 실패하며 CUDA 컨텍스트가 죽었다.
+PED_HYST = 0.8         # 정지 중일 때 해제 판정에 더해주는 여유(이력)
+PED_MIN_STATE_S = 0.8  # 상태 전환 최소 유지 시간
+PED_MIN_ISSUE_S = 1.0  # 경로 재발급 최소 간격
+PED_POLL_EVERY = 2     # 위치 읽기 주기(스텝)
 
 
 class Agent:
@@ -112,7 +120,8 @@ class Agent:
 class PedAgent:
     """애니메이션 그래프가 구동하는 보행자. 위치는 우리가 쓰지 않고 읽는다."""
     __slots__ = ("skel", "prim", "c", "wp", "i", "x", "y", "hd", "v", "line",
-                 "kind", "wait", "stopped", "last", "asset", "stall", "ref")
+                 "kind", "wait", "stopped", "last", "asset", "stall", "ref",
+                 "t_state", "t_issue")
     def __init__(self, skel, prim, wp, i, x, y, asset, line):
         self.skel, self.prim, self.c = skel, prim, None
         self.wp, self.i, self.line = wp, i, line
@@ -120,6 +129,7 @@ class PedAgent:
         self.kind, self.wait, self.stopped = "ped", False, False
         self.last, self.asset = (x, y), asset
         self.stall, self.ref = 0.0, (x, y)     # 정체 감시(초, 기준 위치)
+        self.t_state, self.t_issue = -9.9, -9.9  # 마지막 상태 전환·경로 발급 시각
 
 
 class Traffic:
@@ -215,6 +225,10 @@ class Traffic:
     def _spawn_peds(self, n_limit):
         """공식 파이프라인. 실패하면 정지 자세 보행자로 자동 대체한다."""
         import glob as _glob
+        mode = os.environ.get("TRAFFIC_PED_MODE", "anim")   # anim | static
+        if mode == "static":
+            self.log("[traffic] TRAFFIC_PED_MODE=static — 정지 자세 보행자 사용", flush=True)
+            return self._spawn_peds_static(n_limit)
         try:
             import AnimGraphSchema                      # noqa: F401  (확장 활성화 확인)
             import omni.anim.graph.core                 # noqa: F401
@@ -348,43 +362,52 @@ class Traffic:
             pts.append(carb.Float3(w[0], w[1], PED_LIFT))
             prev = w; k += 1
         p.last = prev
+        p.t_issue = self._pt
         p.c.set_variable("PathPoints", pts)
         p.c.set_variable("Walk", 1.0)
         p.c.set_variable("Action", "Walk")
+        self._n_issue = getattr(self, "_n_issue", 0) + 1
 
     # ----- 보행자 한 스텝 -----
     def _step_peds(self, dt, robot_xy):
         import carb, omni.anim.graph.core as ag
+        self._pt = getattr(self, "_pt", 0.0) + dt
+        self._pstep = getattr(self, "_pstep", 0) + 1
+        poll = (self._pstep % PED_POLL_EVERY) == 0
         for p in self.peds:
             if p.c is None:                       # 캐릭터 매니저 준비 후에야 잡힌다
                 p.c = ag.get_character(p.skel)
                 if p.c is None: continue
                 self._issue(p)
-            pos = carb.Float3(0, 0, 0); rot = carb.Float4(0, 0, 0, 0)
-            p.c.get_world_transform(pos, rot)
-            p.x, p.y = float(pos[0]), float(pos[1])
+            if poll:                              # GPU→CPU 읽기는 매 스텝 하지 않는다
+                pos = carb.Float3(0, 0, 0); rot = carb.Float4(0, 0, 0, 0)
+                p.c.get_world_transform(pos, rot)
+                p.x, p.y = float(pos[0]), float(pos[1])
             n = len(p.wp)
             if math.hypot(p.wp[p.i % n][0] - p.x, p.wp[p.i % n][1] - p.y) < PED_WP_REACH:
                 p.i += 1
             tx, ty = p.wp[p.i % n]
             p.hd = math.atan2(ty - p.y, tx - p.x)
 
+            # 이력(hysteresis): 이미 멈춘 사람은 더 넉넉해야 다시 걷는다.
+            # 임계값 근처에서 판정이 프레임마다 뒤집히는 것을 막는 목적.
+            m = PED_HYST if p.stopped else 0.0
             stop = False
             d_sig = self._blocked_by_signal(p, p.x, p.y, p.hd)
-            if d_sig is not None and d_sig < PED_STOP_DIST:
+            if d_sig is not None and d_sig < PED_STOP_DIST + m:
                 stop = True
             if not stop and robot_xy is not None:
                 rdx, rdy = robot_xy[0] - p.x, robot_xy[1] - p.y
                 ah = rdx * math.cos(p.hd) + rdy * math.sin(p.hd)
                 la = abs(-rdx * math.sin(p.hd) + rdy * math.cos(p.hd))
-                if 0 < ah < ROBOT_STOP_PED and la < 0.9: stop = True
+                if -0.5 < ah < ROBOT_STOP_PED + m and la < 0.9 + m * 0.5: stop = True
             if not stop:                          # 같은 통행선의 앞사람만 추돌 방지
                 for q in self.peds:               # (다른 노선까지 보면 서로 묶여 교착)
                     if q is p or q.line != p.line: continue
                     qx, qy = q.x - p.x, q.y - p.y
                     ah = qx * math.cos(p.hd) + qy * math.sin(p.hd)
                     la = abs(-qx * math.sin(p.hd) + qy * math.cos(p.hd))
-                    if 0 < ah < PED_SEP and la < 0.5: stop = True; break
+                    if 0 < ah < PED_SEP + m and la < 0.5 + m * 0.5: stop = True; break
 
             # 정체 감시: 신호 대기가 아닌데 오래 안 움직이면 경로를 다시 발급
             if math.hypot(p.ref[0] - p.x, p.ref[1] - p.y) > 0.3:
@@ -393,19 +416,32 @@ class Traffic:
                 p.stall += dt
                 if p.stall > PED_STALL_S and d_sig is None:
                     p.stall, p.stopped, stop = 0.0, False, False
-                    self._issue(p)
-                    self._stalls = getattr(self, "_stalls", 0) + 1
-                    if self._stalls <= 5:
-                        self.log(f"[traffic] 보행자 정체 해소 {p.skel.split('/')[3]}", flush=True)
+                    if self._pt - p.t_issue >= PED_MIN_ISSUE_S:
+                        self._issue(p)
+                        self._stalls = getattr(self, "_stalls", 0) + 1
+                        if self._stalls <= 5:
+                            self.log(f"[traffic] 보행자 정체 해소 {p.skel.split('/')[3]}", flush=True)
 
-            if stop != p.stopped:
+            # 상태 전환은 최소 유지 시간을 넘겨야 반영한다(그래프 통신 폭주 방지)
+            if stop != p.stopped and (self._pt - p.t_state) >= PED_MIN_STATE_S:
                 p.stopped = stop
-                if stop: p.c.set_variable("Action", "None")   # 제자리 대기로 전이
-                else:    self._issue(p)
-            elif not stop and math.hypot(p.last[0] - p.x, p.last[1] - p.y) < PED_REISSUE_AT:
+                p.t_state = self._pt
+                if stop:
+                    p.c.set_variable("Action", "None")   # 제자리 대기로 전이
+                elif self._pt - p.t_issue >= PED_MIN_ISSUE_S:
+                    self._issue(p)
+            elif (not p.stopped
+                  and math.hypot(p.last[0] - p.x, p.last[1] - p.y) < PED_REISSUE_AT
+                  and self._pt - p.t_issue >= PED_MIN_ISSUE_S):
                 self._issue(p)                    # 경로가 짧아지기 전에 이어붙임
-            p.wait = stop
-            p.v = 0.0 if stop else 1.0
+            p.wait = p.stopped
+            p.v = 0.0 if p.stopped else 1.0
+
+        # 그래프 통신량 감시 — 초당 발급 수가 튀면 로그로 드러나게 한다
+        if self._pstep % 300 == 0:
+            n_i = getattr(self, "_n_issue", 0)
+            self.log(f"[traffic] 보행자 경로발급 누적 {n_i}회 "
+                     f"({n_i / max(self._pt, 1e-3):.2f}회/초)", flush=True)
 
     # ----- 한 스텝 -----
     def step(self, dt, sig_state, robot_xy=None):

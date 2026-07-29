@@ -47,6 +47,20 @@ try:
 except Exception as e:
     print("[teleop] collision term defuse skipped:", e, flush=True)
 
+# Fabric(USDRT) 비활성이 기본. IsaacLab은 트랜스폼 동기화 가속을 위해 Fabric을
+# 기본 활성하는데, 보행자(UsdSkel 스킨드 메시)가 씬에 있는 상태에서 로봇이
+# 이동하면 렌더 큐-CUDA 동기화 지점에서 불법 메모리 접근이 나며 죽는다.
+#   cudaErrorIllegalAddress / cudaErrorMisalignedAddress
+#   "Failed to wait on external semaphore" → Render graph command list
+# 대조 실험: Fabric ON 3m/46초 크래시 vs OFF 440m/9분 완주(fps도 5.2→5.7 상승).
+# num_envs=1 텔레옵에서는 Fabric 이득이 없다. TELEOP_FABRIC=1 로 되돌릴 수 있다.
+if _os.environ.get("TELEOP_FABRIC", "0") == "0":
+    try:
+        env_cfg.sim.use_fabric = False
+        print("[teleop] Fabric 비활성(USD 직접 갱신)", flush=True)
+    except Exception as _fe:
+        print("[teleop] Fabric 설정 실패:", _fe, flush=True)
+
 env = gym.make(args_cli.task, cfg=env_cfg)
 print("[teleop] action space:", env.action_space, flush=True)
 ACT_DIM = int(env.action_space.shape[-1])
@@ -56,7 +70,12 @@ env.reset()
 try:
     import carb.settings
     _cs = carb.settings.get_settings()
-    _cs.set("/rtx/post/aa/op", 3)                      # DLSS
+    # AA: 3=DLSS(기본), 2=TAA, 1=FXAA, 0=없음.
+    # DLSS는 모션 벡터를 쓰는데 스킨드 메시(보행자)와 조합 시 GPU 불법 메모리 접근
+    # (cudaErrorIllegalAddress / Xid 31 MMU Fault)이 관측돼 전환 가능하게 둔다.
+    _AA = int(_os.environ.get("TELEOP_AA", "3"))
+    _cs.set("/rtx/post/aa/op", _AA)
+    print(f"[quality] AA op = {_AA}", flush=True)
     _cs.set("/rtx/ambientOcclusion/enabled", True)
     _cs.set("/rtx/reflections/enabled", True)
     _cs.set("/rtx/indirectDiffuse/enabled", True)
@@ -185,11 +204,18 @@ def _quat_yaw_pitch(yaw, pitch):
     return _np.array([cy * cp, -sy * sp, cy * sp, sy * cp])
 
 
+# TELEOP_CAMS=1 이면 3인칭 카메라를 아예 만들지 않는다(렌더 프로덕트 1개).
+# 렌더 큐-CUDA 동기화 지점에서 나는 크래시의 변수를 좁히기 위한 스위치.
+_TPV_ON = _os.environ.get("TELEOP_CAMS", "2") != "1"
 cam_ego = Camera(prim_path="/World/ego_cam", resolution=(CAM_W, CAM_H))
-cam_tpv = Camera(prim_path="/World/tpv_cam", resolution=(CAM_W, CAM_H))
 cam_ego.initialize()
-cam_tpv.initialize()
-_BASE_FL = float(cam_tpv.get_focal_length())
+cam_tpv = None
+if _TPV_ON:
+    cam_tpv = Camera(prim_path="/World/tpv_cam", resolution=(CAM_W, CAM_H))
+    cam_tpv.initialize()
+else:
+    print("[teleop] TPV 카메라 비활성(렌더 프로덕트 1개)", flush=True)
+_BASE_FL = float(cam_tpv.get_focal_length()) if _TPV_ON else 24.0
 print(f"[teleop] base focal length: {_BASE_FL}", flush=True)
 _last_fl = [0.0]
 
@@ -207,7 +233,7 @@ def _update_cameras(yaw_cmd=None):
         yaw = yaw_cmd
     fx, fy = math.cos(yaw), math.sin(yaw)
     c = dict(CAMCFG)
-    if c.get("fl", 0) > 0 and abs(c["fl"] - _last_fl[0]) > 1e-6:
+    if _TPV_ON and c.get("fl", 0) > 0 and abs(c["fl"] - _last_fl[0]) > 1e-6:
         try:
             cam_tpv.set_focal_length(_BASE_FL * c["fl"])
             _last_fl[0] = c["fl"]
@@ -216,6 +242,8 @@ def _update_cameras(yaw_cmd=None):
             print("[teleop] focal set failed:", e, flush=True)
     ego_pos = _np.array([pos[0] + fx * c["ex"], pos[1] + fy * c["ex"], pos[2] + c["ez"]])
     cam_ego.set_world_pose(ego_pos, _quat_yaw_pitch(yaw, math.radians(c["ep"])), camera_axes="world")
+    if not _TPV_ON:
+        return pos, yaw
     _te = math.radians(max(3.0, min(85.0, c.get("te", 31.5))))
     _tr = max(2.0, min(40.0, c.get("tr", 10.55)))
     _az = yaw + math.pi + math.radians(c.get("ta", 0.0))   # ta=0 → 정후방
@@ -657,7 +685,7 @@ while simulation_app.is_running():
     env.step(action)
 
     if step_i % 2 == 0:
-        _capture("tpv", cam_tpv)
+        if _TPV_ON: _capture("tpv", cam_tpv)
         _capture("ego", cam_ego)
 
     _tick_hist.append(time.monotonic() - t0)

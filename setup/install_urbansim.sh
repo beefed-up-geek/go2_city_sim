@@ -32,7 +32,10 @@ $PY -m pip install -q --no-build-isolation -e .
 echo "== extras =="
 $PY -m pip install -q -r "$(dirname "$0")/../requirements.txt"
 # torch를 컨테이너 동봉 torchvision과 정합한 버전으로 복원(editable 설치가 올려놨을 수 있음)
-$PY -m pip install -q "torch==2.7.0" --index-url https://download.pytorch.org/whl/cu128
+# torchvision/torchaudio 도 함께 고정한다 — Isaac Sim 5.1 환경에서는 의존성 해석이
+# torchvision 0.28 을 끌어와 "operator torchvision::nms does not exist" 로 기동이 죽었다.
+$PY -m pip install -q "torch==2.7.0" "torchvision==0.22.0" "torchaudio==2.7.0" \
+  --index-url https://download.pytorch.org/whl/cu128
 $PY -m pip install -q "numpy==1.26.4" "typing_extensions==4.15.0"   # 재고정(위 설치가 되돌릴 수 있음)
 # Kit pip_prebundle의 typing_extensions 사본이 site-packages보다 우선 로드됨 — 동일 버전으로 교체
 SITE_TE=/isaac-sim/kit/python/lib/python3.11/site-packages/typing_extensions.py
